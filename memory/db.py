@@ -77,7 +77,7 @@ async def get_tasks_today(user_id: int) -> List[Task]:
     async with get_session() as session:
         statement = select(Task).where(
             Task.user_id == user_id,
-            Task.deadline.is_not(None),
+            Task.deadline != None,
         )
         result = await session.exec(statement)
         tasks = result.all()
