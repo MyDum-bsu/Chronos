@@ -1,9 +1,11 @@
+import asyncio
 from datetime import datetime
 from typing import Optional, List
-from sqlmodel import SQLModel, Field, create_engine, select, AsyncSession
-from sqlmodel.ext.asyncio.session import AsyncSession as AsyncSessionType
 from contextlib import asynccontextmanager
-import asyncio
+
+from sqlmodel import SQLModel, Field, select
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 class Task(SQLModel, table=True):
@@ -21,7 +23,7 @@ DATABASE_URL = "sqlite+aiosqlite:///chronos.db"
 
 
 # Create async engine
-engine = create_engine(DATABASE_URL, echo=True, future=True)
+engine = create_async_engine(DATABASE_URL, echo=True, future=True)
 
 
 async def init_db() -> None:
@@ -31,7 +33,7 @@ async def init_db() -> None:
 
 
 @asynccontextmanager
-async def get_session() -> AsyncSessionType:
+async def get_session() -> AsyncSession:
     """Async context manager for database sessions."""
     async with AsyncSession(engine) as session:
         yield session
@@ -89,15 +91,13 @@ async def get_tasks_today(user_id: int) -> List[Task]:
 async def get_task_by_id(task_id: int) -> Optional[Task]:
     """Get a single task by ID."""
     async with get_session() as session:
-        statement = select(Task).where(Task.id == task_id)
-        result = await session.exec(statement)
-        return result.first()
+        return await session.get(Task, task_id)
 
 
 async def update_task_status(task_id: int, is_completed: bool) -> Optional[Task]:
     """Update task completion status."""
     async with get_session() as session:
-        task = await get_task_by_id(task_id)
+        task = await session.get(Task, task_id)
         if task:
             task.is_completed = is_completed
             session.add(task)
@@ -110,7 +110,7 @@ async def update_task_status(task_id: int, is_completed: bool) -> Optional[Task]
 async def delete_task(task_id: int) -> bool:
     """Delete a task by ID."""
     async with get_session() as session:
-        task = await get_task_by_id(task_id)
+        task = await session.get(Task, task_id)
         if task:
             await session.delete(task)
             await session.commit()
