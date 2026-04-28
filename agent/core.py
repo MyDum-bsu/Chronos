@@ -6,10 +6,10 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from .tools import (
-    get_current_time,
-    add_task,
-    get_tasks_for_today,
-    complete_task,
+    get_time as _get_time,
+    add_task as _add_task,
+    get_today_tasks as _get_today_tasks,
+    complete_task as _complete_task,
 )
 
 # System prompt for the butler agent
@@ -34,7 +34,9 @@ SYSTEM_PROMPT = """You are Chronos, a polite and professional AI butler-planner.
 - When setting deadlines, always consider the current time
 - Present information in a clear, organized manner
 - Be proactive in suggesting task management strategies
-- Address the user respectfully (e.g., "sir", "madam", or by name if known)"""
+- Address the user respectfully (e.g., "sir", "madam", or by name if known)
+
+CRITICAL INSTRUCTION: When calling tools, you MUST output valid JSON for the arguments. Never merge the function name with the arguments. Format your internal calls flawlessly."""
 
 
 # Dependencies container for agent
@@ -74,7 +76,7 @@ def get_agent() -> Agent[AgentDeps]:
     
     # Register tools with ctx parameter for deps access
     @agent.tool
-    async def get_current_time_tool(ctx: RunContext[AgentDeps], timezone: str = "UTC") -> str:
+    async def get_time(ctx: RunContext[AgentDeps], timezone: str = "UTC") -> str:
         """
         Get the current date and time.
         
@@ -84,10 +86,10 @@ def get_agent() -> Agent[AgentDeps]:
         Returns:
             Current date and time as ISO format string.
         """
-        return await get_current_time(timezone=timezone)
+        return await _get_time(timezone=timezone)
     
     @agent.tool
-    async def add_task_tool(
+    async def add_task(
         ctx: RunContext[AgentDeps],
         title: str,
         description: str | None = None,
@@ -115,7 +117,7 @@ def get_agent() -> Agent[AgentDeps]:
                     "task_id": None,
                 }
         
-        task = await add_task(
+        task = await _add_task(
             user_id=ctx.deps.user_id,
             title=title,
             description=description,
@@ -128,7 +130,7 @@ def get_agent() -> Agent[AgentDeps]:
         }
     
     @agent.tool
-    async def get_tasks_for_today_tool(ctx: RunContext[AgentDeps], timezone: str = "UTC") -> dict:
+    async def get_today_tasks(ctx: RunContext[AgentDeps], timezone: str = "UTC") -> dict:
         """
         Get all tasks due today for the current user.
         
@@ -138,10 +140,10 @@ def get_agent() -> Agent[AgentDeps]:
         Returns:
             Dictionary with tasks list and count.
         """
-        return await get_tasks_for_today(ctx.deps.user_id, timezone=timezone)
+        return await _get_today_tasks(ctx.deps.user_id, timezone=timezone)
     
     @agent.tool
-    async def complete_task_tool(
+    async def complete_task(
         ctx: RunContext[AgentDeps],
         task_id: int,
         timezone: str = "UTC",
@@ -156,7 +158,7 @@ def get_agent() -> Agent[AgentDeps]:
         Returns:
             Confirmation message with success status.
         """
-        result = await complete_task(task_id, timezone=timezone)
+        result = await _complete_task(task_id, timezone=timezone)
         if result["success"]:
             return {
                 "success": True,

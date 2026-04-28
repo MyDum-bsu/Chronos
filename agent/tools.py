@@ -50,18 +50,18 @@ class CompleteTaskResponse(BaseModel):
     success: bool = Field(..., description="Whether operation succeeded")
 
 
-async def get_current_time(timezone: str = "UTC") -> str:
+async def get_time(timezone: str = "UTC") -> str:
     """
     Get the current date and time.
     
     Args:
-        timezone: Timezone identifier (e.g., 'UTC', 'Europe/Moscow', 'America/New_York')
+        timezone: Timezone identifier (e.g., 'UTC', 'Europe/Moscow', 'America/New_York').
     
     Returns:
         Current date and time in ISO format (YYYY-MM-DD HH:MM:SS).
         
     Example:
-        >>> await get_current_time()
+        >>> await get_time()
         '2026-04-28 12:30:05'
     """
     # For now, return local time; timezone handling can be added with pytz if needed
@@ -104,7 +104,7 @@ async def add_task(
     }
 
 
-async def get_tasks_for_today(user_id: int, timezone: str = "UTC") -> dict:
+async def get_today_tasks(user_id: int, timezone: str = "UTC") -> dict:
     """
     Get all tasks due today for a specific user.
     
@@ -116,7 +116,7 @@ async def get_tasks_for_today(user_id: int, timezone: str = "UTC") -> dict:
         Dictionary with list of tasks and count.
     
     Example:
-        >>> await get_tasks_for_today(123)
+        >>> await get_today_tasks(123)
         {"tasks": [{"task_id": 1, "title": "Meeting", ...}], "count": 1}
     """
     tasks = await get_tasks_today(user_id)
@@ -172,13 +172,13 @@ if __name__ == "__main__":
         await init_db()
         print("DB initialized")
         
-        time = await get_current_time()
+        time = await get_time()
         print(f"Current time: {time}")
         
         task = await add_task(1, "Test task", "Test desc")
         print(f"Added task: {task}")
         
-        tasks = await get_tasks_for_today(1)
+        tasks = await get_today_tasks(1)
         print(f"Today's tasks: {tasks}")
         
         completed = await complete_task(task["task_id"])
