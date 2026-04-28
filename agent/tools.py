@@ -50,9 +50,12 @@ class CompleteTaskResponse(BaseModel):
     success: bool = Field(..., description="Whether operation succeeded")
 
 
-async def get_current_time() -> str:
+async def get_current_time(timezone: str = "UTC") -> str:
     """
     Get the current date and time.
+    
+    Args:
+        timezone: Timezone identifier (e.g., 'UTC', 'Europe/Moscow', 'America/New_York')
     
     Returns:
         Current date and time in ISO format (YYYY-MM-DD HH:MM:SS).
@@ -61,6 +64,7 @@ async def get_current_time() -> str:
         >>> await get_current_time()
         '2026-04-28 12:30:05'
     """
+    # For now, return local time; timezone handling can be added with pytz if needed
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -100,12 +104,13 @@ async def add_task(
     }
 
 
-async def get_tasks_for_today(user_id: int) -> dict:
+async def get_tasks_for_today(user_id: int, timezone: str = "UTC") -> dict:
     """
     Get all tasks due today for a specific user.
     
     Args:
         user_id: Telegram user ID
+        timezone: Timezone identifier for date calculation (default: UTC)
     
     Returns:
         Dictionary with list of tasks and count.
@@ -130,12 +135,13 @@ async def get_tasks_for_today(user_id: int) -> dict:
     }
 
 
-async def complete_task(task_id: int) -> dict:
+async def complete_task(task_id: int, timezone: str = "UTC") -> dict:
     """
     Mark a task as completed.
     
     Args:
         task_id: ID of the task to mark as completed
+        timezone: Timezone identifier (unused, for tool signature compatibility)
     
     Returns:
         Dictionary with task_id, is_completed status, and success flag.

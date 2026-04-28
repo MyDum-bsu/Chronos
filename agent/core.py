@@ -74,9 +74,9 @@ def get_agent() -> Agent[AgentDeps]:
     
     # Register tools with ctx parameter for deps access
     @agent.tool
-    async def get_current_time_tool(ctx: RunContext[AgentDeps], **kwargs) -> str:
+    async def get_current_time_tool(ctx: RunContext[AgentDeps], timezone: str = "UTC") -> str:
         """Get the current date and time."""
-        return await get_current_time()
+        return await get_current_time(timezone=timezone)
     
     @agent.tool
     async def add_task_tool(
@@ -120,15 +120,15 @@ def get_agent() -> Agent[AgentDeps]:
         }
     
     @agent.tool
-    async def get_tasks_for_today_tool(ctx: RunContext[AgentDeps], **kwargs) -> dict:
+    async def get_tasks_for_today_tool(ctx: RunContext[AgentDeps], timezone: str = "UTC") -> dict:
         """Get all tasks due today for the current user."""
-        return await get_tasks_for_today(ctx.deps.user_id)
+        return await get_tasks_for_today(ctx.deps.user_id, timezone=timezone)
     
     @agent.tool
     async def complete_task_tool(
         ctx: RunContext[AgentDeps],
         task_id: int,
-        **kwargs,
+        timezone: str = "UTC",
     ) -> dict:
         """
         Mark a task as completed.
@@ -139,7 +139,7 @@ def get_agent() -> Agent[AgentDeps]:
         Returns:
             Confirmation message.
         """
-        result = await complete_task(task_id)
+        result = await complete_task(task_id, timezone=timezone)
         if result["success"]:
             return {
                 "success": True,
