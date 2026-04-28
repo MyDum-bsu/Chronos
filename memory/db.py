@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import Optional, List, AsyncIterator
+from typing import Optional, List, Sequence, AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlmodel import SQLModel, Field, select
@@ -62,7 +62,7 @@ async def create_task(
         return task
 
 
-async def get_tasks_by_user(user_id: int) -> List[Task]:
+async def get_tasks_by_user(user_id: int) -> Sequence[Task]:
     """Get all tasks for a specific user."""
     async with get_session() as session:
         statement = select(Task).where(Task.user_id == user_id)
@@ -118,7 +118,7 @@ async def delete_task(task_id: int) -> bool:
         return False
 
 
-async def get_incomplete_tasks(user_id: int) -> List[Task]:
+async def get_incomplete_tasks(user_id: int) -> Sequence[Task]:
     """Get all incomplete tasks for a user."""
     async with get_session() as session:
         statement = select(Task).where(
