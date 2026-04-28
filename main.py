@@ -2,9 +2,11 @@ import asyncio
 import logging
 import os
 
-from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+
+from dotenv import load_dotenv
 
 from bot.handlers import register_handlers
 
@@ -27,8 +29,11 @@ async def main() -> None:
         logger.error("TELEGRAM_BOT_TOKEN or BOT_TOKEN environment variable is not set")
         return
     
-    # Initialize bot and dispatcher
-    bot = Bot(token=bot_token, parse_mode=ParseMode.HTML)
+    # Initialize bot with default properties
+    bot = Bot(
+        token=bot_token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    )
     dp = Dispatcher()
     
     # Register handlers
