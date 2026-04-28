@@ -1,8 +1,7 @@
 import os
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.models.groq import GroqModel
 
 from .tools import (
     get_current_time,
@@ -45,15 +44,9 @@ class AgentDeps(BaseModel):
 # Initialize the PydanticAI Agent
 def get_agent() -> Agent[AgentDeps]:
     """Get configured PydanticAI Agent instance."""
-    # Use OpenAI-compatible provider (OpenRouter)
-    provider = OpenAIProvider(
-        base_url='https://openrouter.ai/api/v1',
-        api_key=os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY'),
-    )
-    
-    model = OpenAIChatModel(
-        model_name='meta-llama/llama-3.3-70b-instruct:free',
-        provider=provider,
+    model = GroqModel(
+        model_name='llama-3.3-70b-versatile',
+        provider='groq',
     )
     
     agent: Agent[AgentDeps] = Agent(
