@@ -41,3 +41,6 @@ env/
 # UV specific
 .uv/
 uv.lock
+
+# Database
+*.db
