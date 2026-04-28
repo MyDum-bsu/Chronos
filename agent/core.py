@@ -74,7 +74,7 @@ def get_agent() -> Agent[AgentDeps]:
     
     # Register tools with ctx parameter for deps access
     @agent.tool
-    async def get_current_time_tool(ctx: RunContext[AgentDeps]) -> str:
+    async def get_current_time_tool(ctx: RunContext[AgentDeps], **kwargs) -> str:
         """Get the current date and time."""
         return await get_current_time()
     
@@ -120,7 +120,7 @@ def get_agent() -> Agent[AgentDeps]:
         }
     
     @agent.tool
-    async def get_tasks_for_today_tool(ctx: RunContext[AgentDeps]) -> dict:
+    async def get_tasks_for_today_tool(ctx: RunContext[AgentDeps], **kwargs) -> dict:
         """Get all tasks due today for the current user."""
         return await get_tasks_for_today(ctx.deps.user_id)
     
@@ -128,6 +128,7 @@ def get_agent() -> Agent[AgentDeps]:
     async def complete_task_tool(
         ctx: RunContext[AgentDeps],
         task_id: int,
+        **kwargs,
     ) -> dict:
         """
         Mark a task as completed.
