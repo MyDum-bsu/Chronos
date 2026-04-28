@@ -1,7 +1,7 @@
 import asyncio
 from aiogram import types
 from aiogram.filters import Command
-from aiogram.types.message import ContentType
+from aiogram.enums import ContentType
 
 from agent.core import process_message
 
@@ -20,19 +20,22 @@ async def handle_text_message(message: types.Message) -> None:
     user_id = message.from_user.id
     user_text = message.text
     
+    if not user_text:
+        return
+    
     # Show typing status while processing
-    async with message.bot.send_chat_action(chat_id=message.chat.id, action="typing"):
-        try:
-            response = await process_message(user_id, user_text)
-            await message.answer(response)
-        except Exception as e:
-            # Log error and send friendly message
-            await message.answer(
-                "I apologize, but I encountered an issue processing your request. "
-                "Please try again later."
-            )
-            # Re-raise for logging
-            raise
+    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    try:
+        response = await process_message(user_id, user_text)
+        await message.answer(response)
+    except Exception as e:
+        # Log error and send friendly message
+        await message.answer(
+            "I apologize, but I encountered an issue processing your request. "
+            "Please try again later."
+        )
+        # Re-raise for logging
+        raise
 
 
 def register_handlers(dp) -> None:
