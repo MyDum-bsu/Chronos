@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlmodel import SQLModel, Field, select
@@ -33,7 +33,7 @@ async def init_db() -> None:
 
 
 @asynccontextmanager
-async def get_session() -> AsyncSession:
+async def get_session() -> AsyncIterator[AsyncSession]:
     """Async context manager for database sessions."""
     async with AsyncSession(engine) as session:
         yield session
