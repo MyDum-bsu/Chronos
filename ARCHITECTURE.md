@@ -3,7 +3,7 @@
 ## Tech Stack
 - Python 3.11+
 - Agent Framework: `pydantic-ai`
-- LLM: `groq` (model: `llama-3.3-70b-versatile`)
+- LLM: `groq` (model: `openai/gpt-oss-20b`)
 - Telegram UI: `aiogram` (v3.x, async)
 - Database: `sqlmodel` + `aiosqlite`
 - Vector Memory: `chromadb` + `sentence-transformers` (model: `all-MiniLM-L6-v2`)
