@@ -61,7 +61,7 @@ def get_agent() -> Agent[AgentDeps]:
     )
     
     model = GroqModel(
-        model_name='llama3-groq-70b-8192-tool-use-preview',
+        model_name='openai/gpt-oss-120b',
         provider=provider,
     )
     
