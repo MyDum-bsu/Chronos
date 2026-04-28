@@ -1,7 +1,7 @@
 import os
-from pydantic_ai import Agent, RunContext, ModelSettings
+from pydantic import BaseModel
+from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.groq import GroqModel
-from pydantic_ai.providers.groq import GroqProvider
 
 from .tools import (
     get_current_time,
@@ -36,36 +36,33 @@ SYSTEM_PROMPT = """You are Chronos, a polite and professional AI butler-planner.
 
 
 # Dependencies container for agent
-class AgentDependencies:
+class AgentDeps(BaseModel):
     """User context for agent dependencies."""
     user_id: int
 
 
 # Initialize the PydanticAI Agent
-def get_agent() -> Agent:
+def get_agent() -> Agent[AgentDeps]:
     """Get configured PydanticAI Agent instance."""
-    # Create Groq provider with API key from environment
-    provider = GroqProvider(api_key=os.getenv('GROQ_API_KEY'))
-    
     model = GroqModel(
         model_name='llama-3.3-70b-versatile',
-        provider=provider,
+        provider='groq',  # Uses GROQ_API_KEY env var automatically
     )
     
-    agent = Agent(
+    agent: Agent[AgentDeps] = Agent(
         model=model,
         system_prompt=SYSTEM_PROMPT,
     )
     
-    # Register tools
+    # Register tools with ctx parameter for deps access
     @agent.tool
-    async def get_current_time_tool(ctx: RunContext[AgentDependencies]) -> str:
+    async def get_current_time_tool(ctx: RunContext[AgentDeps]) -> str:
         """Get the current date and time."""
         return await get_current_time()
     
     @agent.tool
     async def add_task_tool(
-        ctx: RunContext[AgentDependencies],
+        ctx: RunContext[AgentDeps],
         title: str,
         description: str | None = None,
         deadline: str | None = None,
@@ -105,13 +102,13 @@ def get_agent() -> Agent:
         }
     
     @agent.tool
-    async def get_tasks_for_today_tool(ctx: RunContext[AgentDependencies]) -> dict:
+    async def get_tasks_for_today_tool(ctx: RunContext[AgentDeps]) -> dict:
         """Get all tasks due today for the current user."""
         return await get_tasks_for_today(ctx.deps.user_id)
     
     @agent.tool
     async def complete_task_tool(
-        ctx: RunContext[AgentDependencies],
+        ctx: RunContext[AgentDeps],
         task_id: int,
     ) -> dict:
         """
@@ -139,10 +136,10 @@ def get_agent() -> Agent:
 
 
 # Global agent instance (lazy-loaded)
-_agent: Agent | None = None
+_agent: Agent[AgentDeps] | None = None
 
 
-def get_agent_instance() -> Agent:
+def get_agent_instance() -> Agent[AgentDeps]:
     """Get or create the global agent instance."""
     global _agent
     if _agent is None:
@@ -166,8 +163,11 @@ async def process_message(user_id: int, text: str) -> str:
         "I've added the task for you, sir."
     """
     agent = get_agent_instance()
-    deps = AgentDependencies()
-    deps.user_id = user_id
     
-    result = await agent.run(text, deps=deps)
+    # Run agent with user_id in deps
+    result = await agent.run(
+        text,
+        deps=AgentDeps(user_id=user_id)
+    )
+    
     return result.output
