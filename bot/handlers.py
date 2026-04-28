@@ -17,6 +17,11 @@ async def cmd_start(message: types.Message) -> None:
 
 async def handle_text_message(message: types.Message) -> None:
     """Handle any text message from user."""
+    # Ensure message has from_user
+    if not message.from_user:
+        await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
+        return
+    
     user_id = message.from_user.id
     user_text = message.text
     
