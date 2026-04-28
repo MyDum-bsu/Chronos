@@ -1,3 +1,4 @@
+import html
 from aiogram import types, F
 from aiogram.filters import Command
 
@@ -32,7 +33,9 @@ async def handle_text_message(message: types.Message) -> None:
     
     try:
         response = await process_message(user_id, user_text)
-        await message.answer(response)
+        # Escape HTML to prevent Telegram parsing errors if model outputs raw tags
+        safe_response = html.escape(response)
+        await message.answer(safe_response)
     except Exception:
         # Log error and send friendly message
         await message.answer(

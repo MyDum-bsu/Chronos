@@ -36,7 +36,6 @@ SYSTEM_PROMPT = """You are Chronos, a polite and professional AI butler-planner.
 - Be proactive in suggesting task management strategies
 - Address the user respectfully (e.g., "sir", "madam", or by name if known)
 
-CRITICAL INSTRUCTION: When calling tools, you MUST output valid JSON for the arguments. Never merge the function name with the arguments. Format your internal calls flawlessly."""
 
 
 # Dependencies container for agent
@@ -63,7 +62,7 @@ def get_agent() -> Agent[AgentDeps]:
     )
     
     model = GroqModel(
-        model_name='llama-3.3-70b-versatile',
+        model_name='llama3-groq-70b-8192-tool-use-preview',
         provider=provider,
     )
     
