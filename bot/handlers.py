@@ -1,6 +1,5 @@
-from aiogram import types
+from aiogram import types, F
 from aiogram.filters import Command
-from aiogram.enums import ContentType
 
 from agent.core import process_message
 
@@ -52,4 +51,4 @@ def register_handlers(dp) -> None:
         dp: Aiogram Dispatcher instance
     """
     dp.message.register(cmd_start, Command("start"))
-    dp.message.register(handle_text_message, content_type=ContentType.TEXT)
+    dp.message.register(handle_text_message, F.text)
