@@ -1,7 +1,9 @@
 import os
+import httpx
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
-from pydantic_ai.models.groq import GroqModel
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from .tools import (
     get_current_time,
@@ -44,9 +46,24 @@ class AgentDeps(BaseModel):
 # Initialize the PydanticAI Agent
 def get_agent() -> Agent[AgentDeps]:
     """Get configured PydanticAI Agent instance."""
-    model = GroqModel(
+    # Read proxy URL from environment
+    proxy_url = os.getenv('PROXY_URL')
+    
+    # Create httpx client with proxy if configured
+    http_client: httpx.AsyncClient | None = None
+    if proxy_url:
+        http_client = httpx.AsyncClient(proxy=proxy_url)
+    
+    # Use OpenAI-compatible provider for Groq API with optional proxy
+    provider = OpenAIProvider(
+        base_url='https://api.groq.com/openai/v1',
+        api_key=os.getenv('GROQ_API_KEY'),
+        http_client=http_client,
+    )
+    
+    model = OpenAIChatModel(
         model_name='llama-3.3-70b-versatile',
-        provider='groq',
+        provider=provider,
     )
     
     agent: Agent[AgentDeps] = Agent(
