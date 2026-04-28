@@ -1,4 +1,3 @@
-import asyncio
 from aiogram import types
 from aiogram.filters import Command
 from aiogram.enums import ContentType
@@ -28,12 +27,14 @@ async def handle_text_message(message: types.Message) -> None:
     if not user_text:
         return
     
-    # Show typing status while processing
-    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    # Show typing status while processing (only if bot is available)
+    if message.bot:
+        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    
     try:
         response = await process_message(user_id, user_text)
         await message.answer(response)
-    except Exception as e:
+    except Exception:
         # Log error and send friendly message
         await message.answer(
             "I apologize, but I encountered an issue processing your request. "
