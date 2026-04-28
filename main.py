@@ -9,6 +9,7 @@ from aiogram.enums import ParseMode
 from dotenv import load_dotenv
 
 from bot.handlers import register_handlers
+from memory.db import init_db
 
 # Load environment variables from .env file
 load_dotenv()
@@ -23,6 +24,11 @@ logger = logging.getLogger(__name__)
 
 async def main() -> None:
     """Main entry point for the bot."""
+    # Initialize database first
+    logger.info("Initializing database...")
+    await init_db()
+    logger.info("Database initialized successfully")
+    
     # Get bot token from environment
     bot_token = os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('BOT_TOKEN')
     if not bot_token:
