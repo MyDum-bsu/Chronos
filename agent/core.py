@@ -52,6 +52,7 @@ def get_agent() -> Agent[AgentDeps]:
     agent: Agent[AgentDeps] = Agent(
         model=model,
         system_prompt=SYSTEM_PROMPT,
+        deps_type=AgentDeps,
     )
     
     # Register tools with ctx parameter for deps access
