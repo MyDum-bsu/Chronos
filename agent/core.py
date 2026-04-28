@@ -34,8 +34,7 @@ SYSTEM_PROMPT = """You are Chronos, a polite and professional AI butler-planner.
 - When setting deadlines, always consider the current time
 - Present information in a clear, organized manner
 - Be proactive in suggesting task management strategies
-- Address the user respectfully (e.g., "sir", "madam", or by name if known)
-
+- Address the user respectfully (e.g., "sir", "madam", or by name if known)"""
 
 
 # Dependencies container for agent
