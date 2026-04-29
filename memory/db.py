@@ -201,7 +201,7 @@ async def get_due_reminders() -> List[Task]:
             Task.remind == True,
             Task.reminded == False,
             Task.is_completed == False,
-            Task.deadline.is_not(None),
+            Task.deadline.is_not(None),  # type: ignore[attr-defined]
             Task.deadline <= now,  # type: ignore[operator]
             Task.deadline > window_start,  # type: ignore[operator]
         )
