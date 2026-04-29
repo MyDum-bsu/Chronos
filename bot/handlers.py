@@ -1,9 +1,9 @@
 import html
 from aiogram import types, F
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
 
-from agent.core import process_message
+from agent.core import process_message, vector_memory
 from agent.tools import get_today_tasks, complete_task, get_task_stats
 from memory.db import get_incomplete_tasks, get_task_by_id
 from bot.keyboards import get_main_menu
@@ -91,7 +91,7 @@ async def cmd_complete(message: types.Message) -> None:
 
         reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
         await message.answer(
-            "Выберите задачу для отметки как выполненную:",
+            "Выберите задачу для отметки как выполненной:",
             reply_markup=reply_markup
         )
     except Exception:
@@ -131,6 +131,16 @@ async def handle_text_message(message: types.Message) -> None:
     if not user_text:
         return
     
+    # Save user message to vector memory before processing
+    try:
+        await vector_memory.remember(
+            user_id=user_id,
+            text=user_text,
+            metadata={"role": "user"}
+        )
+    except Exception:
+        pass  # Don't fail if memory save fails
+    
     # Show typing status while processing (only if bot is available)
     if message.bot:
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
@@ -154,6 +164,12 @@ async def handle_text_message(message: types.Message) -> None:
         raise
 
 
+# Helper to safely determine if message can be edited
+def _message_is_editable(message: Message | None) -> bool:
+    """Check if message is a real Message (not InaccessibleMessage or None)."""
+    return isinstance(message, Message)
+
+
 # Callback query handlers
 
 async def callback_show_today(callback: CallbackQuery) -> None:
@@ -171,10 +187,11 @@ async def callback_show_today(callback: CallbackQuery) -> None:
         count = result.get("count", 0)
 
         if count == 0:
-            await callback.message.edit_text(
-                "Сегодня задач нет",
-                reply_markup=get_main_menu()
-            )
+            text = "Сегодня задач нет"
+            if _message_is_editable(callback.message):
+                await callback.message.edit_text(text, reply_markup=get_main_menu())
+            else:
+                await callback.answer(text, show_alert=True)
             return
 
         response = f"📋 Ваши задачи на сегодня ({count}):\n\n"
@@ -187,16 +204,19 @@ async def callback_show_today(callback: CallbackQuery) -> None:
                 response += f"   ⏰ {task['deadline']}\n"
             response += "\n"
 
-        await callback.message.edit_text(
-            response,
-            reply_markup=get_main_menu()
-        )
+        if _message_is_editable(callback.message):
+            await callback.message.edit_text(response, reply_markup=get_main_menu())
+        else:
+            await callback.answer(response, show_alert=True)
     except Exception:
-        await callback.message.edit_text(
-            "I apologize, but I encountered an issue processing your request. "
-            "Please try again later.",
-            reply_markup=get_main_menu()
-        )
+        try:
+            error_text = "I apologize, but I encountered an issue processing your request. Please try again later."
+            if _message_is_editable(callback.message):
+                await callback.message.edit_text(error_text, reply_markup=get_main_menu())
+            else:
+                await callback.answer(error_text, show_alert=True)
+        except Exception:
+            await callback.answer("Error occurred. Please try again.")
         raise
 
 
@@ -207,12 +227,12 @@ async def callback_new_task(callback: CallbackQuery) -> None:
         return
     
     await callback.answer()
-    await callback.message.edit_text(
-        "📝 Введи название задачи и время в свободной форме, например:\n"
-        "Купить молоко завтра в 18:00\n\n"
-        "Или просто напиши, что нужно сделать — я сам распределю время.",
-        reply_markup=get_main_menu()
-    )
+    text = "📝 Введи название задачи и время в свободной форме, например:\nКупить молоко завтра в 18:00\n\nИли просто напиши, что нужно сделать — я сам распределю время."
+    
+    if _message_is_editable(callback.message):
+        await callback.message.edit_text(text, reply_markup=get_main_menu())
+    else:
+        await callback.answer(text, show_alert=True)
 
 
 async def callback_complete_task(callback: CallbackQuery) -> None:
@@ -227,10 +247,11 @@ async def callback_complete_task(callback: CallbackQuery) -> None:
     try:
         tasks = await get_incomplete_tasks(user_id)
         if not tasks:
-            await callback.message.edit_text(
-                "Нет активных задач. Все задачи выполнены! 🎉",
-                reply_markup=get_main_menu()
-            )
+            text = "Нет активных задач. Все задачи выполнены! 🎉"
+            if _message_is_editable(callback.message):
+                await callback.message.edit_text(text, reply_markup=get_main_menu())
+            else:
+                await callback.answer(text, show_alert=True)
             return
 
         # Build keyboard with inline buttons for each task
@@ -244,16 +265,21 @@ async def callback_complete_task(callback: CallbackQuery) -> None:
             ])
 
         reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
-        await callback.message.edit_text(
-            "Выберите задачу для отметки как выполненной:",
-            reply_markup=reply_markup
-        )
+        response_text = "Выберите задачу для отметки как выполненной:"
+        
+        if _message_is_editable(callback.message):
+            await callback.message.edit_text(response_text, reply_markup=reply_markup)
+        else:
+            await callback.answer(response_text, show_alert=True)
     except Exception:
-        await callback.message.edit_text(
-            "I apologize, but I encountered an issue processing your request. "
-            "Please try again later.",
-            reply_markup=get_main_menu()
-        )
+        try:
+            error_text = "I apologize, but I encountered an issue processing your request. Please try again later."
+            if _message_is_editable(callback.message):
+                await callback.message.edit_text(error_text, reply_markup=get_main_menu())
+            else:
+                await callback.answer(error_text, show_alert=True)
+        except Exception:
+            await callback.answer("Error occurred. Please try again.")
         raise
 
 
@@ -275,16 +301,19 @@ async def callback_stats(callback: CallbackQuery) -> None:
         response += f"⏳ Активных: {stats['incomplete']}\n"
         response += f"📅 На сегодня: {stats['today']}\n"
         
-        await callback.message.edit_text(
-            response,
-            reply_markup=get_main_menu()
-        )
+        if _message_is_editable(callback.message):
+            await callback.message.edit_text(response, reply_markup=get_main_menu())
+        else:
+            await callback.answer(response, show_alert=True)
     except Exception:
-        await callback.message.edit_text(
-            "I apologize, but I encountered an issue processing your request. "
-            "Please try again later.",
-            reply_markup=get_main_menu()
-        )
+        try:
+            error_text = "I apologize, but I encountered an issue processing your request. Please try again later."
+            if _message_is_editable(callback.message):
+                await callback.message.edit_text(error_text, reply_markup=get_main_menu())
+            else:
+                await callback.answer(error_text, show_alert=True)
+        except Exception:
+            await callback.answer("Error occurred. Please try again.")
         raise
 
 
@@ -311,21 +340,26 @@ async def callback_complete_specific(callback: CallbackQuery) -> None:
     try:
         result = await complete_task(task_id)
         if result.get("success"):
-            await callback.message.edit_text(
-                "✅ Задача отмечена выполненной!",
-                reply_markup=get_main_menu()
-            )
+            text = "✅ Задача отмечена выполненной!"
+            if _message_is_editable(callback.message):
+                await callback.message.edit_text(text, reply_markup=get_main_menu())
+            else:
+                await callback.answer(text, show_alert=True)
         else:
-            await callback.message.edit_text(
-                "❌ Не удалось отметить задачу. Возможно, она уже выполнена или не существует.",
-                reply_markup=get_main_menu()
-            )
+            text = "❌ Не удалось отметить задачу. Возможно, она уже выполнена или не существует."
+            if _message_is_editable(callback.message):
+                await callback.message.edit_text(text, reply_markup=get_main_menu())
+            else:
+                await callback.answer(text, show_alert=True)
     except Exception:
-        await callback.message.edit_text(
-            "I apologize, but I encountered an issue processing your request. "
-            "Please try again later.",
-            reply_markup=get_main_menu()
-        )
+        try:
+            error_text = "I apologize, but I encountered an issue processing your request. Please try again later."
+            if _message_is_editable(callback.message):
+                await callback.message.edit_text(error_text, reply_markup=get_main_menu())
+            else:
+                await callback.answer(error_text, show_alert=True)
+        except Exception:
+            await callback.answer("Error occurred. Please try again.")
         raise
 
 

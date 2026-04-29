@@ -17,7 +17,7 @@ parts/
 sdist/
 var/
 wheels/
-*.egg-info/
+*.egg-info
 .installed.cfg
 *.egg
 
@@ -44,3 +44,12 @@ uv.lock
 
 # Database
 *.db
+chronos.db
+
+# ChromaDB vector storage
+chroma_data/
+
+# Scheduler
+scheduler/*.pyc
+scheduler/__pycache__/
+ENDOFFILE

@@ -62,12 +62,12 @@ async def create_task(
         return task
 
 
-async def get_tasks_by_user(user_id: int) -> Sequence[Task]:
+async def get_tasks_by_user(user_id: int) -> List[Task]:
     """Get all tasks for a specific user."""
     async with get_session() as session:
         statement = select(Task).where(Task.user_id == user_id)
         result = await session.exec(statement)
-        return result.all()
+        return list(result.all())
 
 
 async def get_tasks_today(user_id: int) -> List[Task]:
@@ -118,7 +118,7 @@ async def delete_task(task_id: int) -> bool:
         return False
 
 
-async def get_incomplete_tasks(user_id: int) -> Sequence[Task]:
+async def get_incomplete_tasks(user_id: int) -> List[Task]:
     """Get all incomplete tasks for a user."""
     async with get_session() as session:
         statement = select(Task).where(
@@ -126,7 +126,7 @@ async def get_incomplete_tasks(user_id: int) -> Sequence[Task]:
             Task.is_completed == False,
         )
         result = await session.exec(statement)
-        return result.all()
+        return list(result.all())
 
 
 async def get_all_incomplete_tasks() -> List[Task]:
@@ -137,7 +137,7 @@ async def get_all_incomplete_tasks() -> List[Task]:
             Task.deadline != None,
         )
         result = await session.exec(statement)
-        return result.all()
+        return list(result.all())
 
 
 if __name__ == "__main__":

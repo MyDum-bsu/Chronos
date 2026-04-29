@@ -10,7 +10,13 @@ from .tools import (
     add_task as _add_task,
     get_today_tasks as _get_today_tasks,
     complete_task as _complete_task,
+    get_task_stats as _get_task_stats,
+    recall_user_preferences as _recall_user_preferences,
 )
+from memory.vector import get_vector_memory
+
+# Initialize global vector memory
+vector_memory = get_vector_memory()
 
 # System prompt for the butler agent
 SYSTEM_PROMPT = """You are Chronos, a polite and professional AI butler-planner. Your specialty is time management, scheduling, and task planning.
@@ -34,7 +40,12 @@ SYSTEM_PROMPT = """You are Chronos, a polite and professional AI butler-planner.
 - When setting deadlines, always consider the current time
 - Present information in a clear, organized manner
 - Be proactive in suggesting task management strategies
-- Address the user respectfully (e.g., "sir", "madam", or by name if known)"""
+- Address the user respectfully (e.g., "sir", "madam", or by name if known)
+
+**Memory and Context:**
+- Before generating a response, if the user's message relates to their preferences, habits, or past discussions, use the recall_user_preferences tool to retrieve relevant context from their memory.
+- Use this recalled information to personalize your response without explicitly mentioning the memory lookup.
+- Save important user preferences and facts automatically when they are revealed in conversation."""
 
 
 # Dependencies container for agent
@@ -167,6 +178,41 @@ def get_agent() -> Agent[AgentDeps]:
                 "message": f"Task {task_id} not found or already completed."
             }
     
+    @agent.tool
+    async def get_task_stats(ctx: RunContext[AgentDeps]) -> dict:
+        """
+        Get statistics about user's tasks.
+        
+        Returns:
+            Dictionary with total, completed, incomplete, and today's task counts.
+        """
+        return await _get_task_stats(ctx.deps.user_id)
+    
+    @agent.tool
+    async def recall_user_preferences(
+        ctx: RunContext[AgentDeps],
+        query: str | None = None
+    ) -> list[str]:
+        """
+        Recall relevant user preferences and past context from memory.
+        
+        Args:
+            query: Optional search query. If not provided, uses an empty query to retrieve recent memories.
+        
+        Returns:
+            List of relevant memory strings sorted by relevance. Returns empty list if no memories found.
+        """
+        user_id = ctx.deps.user_id
+        
+        # If query not provided, use empty string to get recent/contextual memories
+        search_query = query if query else ""
+        
+        try:
+            memories = await _recall_user_preferences(user_id=user_id, query=search_query)
+            return memories if memories else []
+        except Exception:
+            return []
+    
     return agent
 
 
@@ -197,6 +243,16 @@ async def process_message(user_id: int, text: str) -> str:
         >>> response = await process_message(123, "Add task: buy groceries")
         "I've added the task for you, sir."
     """
+    # Save user message to vector memory
+    try:
+        await vector_memory.remember(
+            user_id=user_id,
+            text=text,
+            metadata={"role": "user", "message": text[:200]}  # Truncate for metadata
+        )
+    except Exception:
+        pass  # Don't fail the whole process if memory save fails
+    
     agent = get_agent_instance()
     
     # Run agent with user_id in deps
@@ -205,4 +261,16 @@ async def process_message(user_id: int, text: str) -> str:
         deps=AgentDeps(user_id=user_id)
     )
     
-    return result.output
+    response = result.output
+    
+    # Optionally save assistant response to memory (commented for now)
+    # try:
+    #     await vector_memory.remember(
+    #         user_id=user_id,
+    #         text=response,
+    #         metadata={"role": "assistant", "message": response[:200]}
+    #     )
+    # except Exception:
+    #     pass
+    
+    return response

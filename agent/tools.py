@@ -11,6 +11,7 @@ from memory.db import (
     get_incomplete_tasks,
     get_tasks_by_user,
 )
+from memory.vector import get_vector_memory
 
 
 class CurrentTimeResponse(BaseModel):
@@ -189,6 +190,27 @@ async def get_task_stats(user_id: int) -> dict:
         "incomplete": len(incomplete),
         "today": len(today_tasks),
     }
+
+
+async def recall_user_preferences(user_id: int, query: Optional[str] = None) -> list[str]:
+    """
+    Recall relevant user preferences and past context from memory.
+    
+    Args:
+        user_id: Telegram user ID
+        query: Optional search query. If None, returns recent memories using empty query.
+    
+    Returns:
+        List of relevant memory strings sorted by relevance. Empty list if no memories found.
+    """
+    try:
+        vm = get_vector_memory()
+        # If query is None, use empty string to get recent memories
+        search_query = query if query else ""
+        memories = vm.recall(user_id=user_id, query=search_query, n_results=5)
+        return memories if memories else []
+    except Exception:
+        return []
 
 
 if __name__ == "__main__":
