@@ -1,10 +1,15 @@
 import asyncio
+import os
 import uuid
 from typing import Optional, List
 
-import chromadb
+from dotenv import load_dotenv
 from chromadb.config import Settings
+import chromadb
 from sentence_transformers import SentenceTransformer
+
+# Load environment variables (including HF_TOKEN) before any Hugging Face operations
+load_dotenv()
 
 
 class VectorMemory:
@@ -31,7 +36,7 @@ class VectorMemory:
         # Get or create collection
         self.collection = self.client.get_or_create_collection(name=collection_name)
         
-        # Load embedding model
+        # Load embedding model (HF_TOKEN from env will be used automatically by huggingface_hub)
         self.embedder = SentenceTransformer('all-MiniLM-L6-v2')
     
     async def remember(self, user_id: int, text: str, metadata: Optional[dict] = None) -> str:
