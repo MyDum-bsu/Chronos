@@ -55,8 +55,8 @@ async def main() -> None:
     
     print("\nDeleting a specific memory...")
     if memory_ids:
-        vm.delete_memory(memory_ids[0])
-        print(f"  Deleted memory ID: {memory_ids[0]}")
+        success = await vm.delete_memory(memory_ids[0])
+        print(f"  Deleted memory ID: {memory_ids[0]} (success: {success})")
     
     print("\nRecalling after deletion (should not see first memory):")
     results = await vm.recall(user_id, "programming Python", n_results=3)
