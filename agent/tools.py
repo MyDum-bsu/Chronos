@@ -4,7 +4,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 from memory.db import (
-    create_task,
+    Task,
     get_tasks_today,
     update_task_status,
     get_task_by_id,
@@ -121,6 +121,20 @@ class CreateReminderResponse(BaseModel):
     """Response model for creating a reminder."""
     success: bool = Field(..., description="Whether reminder creation succeeded")
     task_id: int = Field(..., description="ID of created reminder task")
+    message: str = Field(..., description="Confirmation message")
+
+
+class ToggleReminderInput(BaseModel):
+    """Input model for toggling reminder on/off."""
+    task_id: int = Field(..., gt=0, description="ID of the task to toggle")
+    enable: bool = Field(..., description="True to enable reminders, False to disable")
+
+
+class ToggleReminderResponse(BaseModel):
+    """Response model for toggling reminder."""
+    success: bool = Field(..., description="Whether toggle succeeded")
+    task_id: int = Field(..., description="ID of the task")
+    enabled: bool = Field(..., description="Current reminder status")
     message: str = Field(..., description="Confirmation message")
 
 
@@ -369,6 +383,51 @@ async def create_reminder(
         "task_id": task.id,
         "message": f"Reminder set for {deadline}",
     }
+
+
+async def toggle_reminder(task_id: int, enable: bool) -> dict:
+    """
+    Enable or disable reminders for a specific task.
+    
+    Args:
+        task_id: ID of the task to toggle
+        enable: True to enable reminders, False to disable
+    
+    Returns:
+        Dictionary with success status and confirmation message.
+    """
+    # First, get the task to verify it exists
+    task = await get_task_by_id(task_id)
+    if not task:
+        return {
+            "success": False,
+            "task_id": task_id,
+            "enabled": enable,
+            "message": f"Task with ID {task_id} not found"
+        }
+    
+    # Update the remind field using update_task_in_db (we need a new function for just updating remind)
+    # For now, use a direct session update
+    from memory.db import get_session
+    async with get_session() as session:
+        task = await session.get(Task, task_id)
+        if task:
+            task.remind = enable
+            session.add(task)
+            await session.commit()
+            return {
+                "success": True,
+                "task_id": task_id,
+                "enabled": enable,
+                "message": f"Reminder {'enabled' if enable else 'disabled'} for task '{task.title}'"
+            }
+        else:
+            return {
+                "success": False,
+                "task_id": task_id,
+                "enabled": enable,
+                "message": f"Task with ID {task_id} not found"
+            }
 
 
 async def recall_user_preferences(user_id: int, query: Optional[str] = None) -> list[str]:

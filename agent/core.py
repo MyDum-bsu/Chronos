@@ -7,6 +7,7 @@ from pydantic_ai.providers.groq import GroqProvider
 
 from .tools import (
     create_reminder as _create_reminder,
+    toggle_reminder as _toggle_reminder,
     get_time as _get_time,
     add_task as _add_task,
     get_today_tasks as _get_today_tasks,
@@ -62,11 +63,13 @@ SYSTEM_PROMPT = """You are Chronos, a polite and professional AI butler-planner.
 - search_tasks: Search tasks by text query
 - get_task_stats: Get statistics (total, active, completed, overdue, today)
 - recall_user_preferences: Recall user memories
+- toggle_reminder: Enable or disable reminders for a specific task
 
 **Important:**
 - For reminder requests ("напомни в 14:50", "remind me at 3pm"), use `create_reminder` tool. Pass the EXACT text the user wants to be reminded of in the `text` parameter, and the calculated deadline in ISO format.
 - For regular tasks, use `add_task`.
-- Never add prefixes like "Reminder:" or "Task:" to the title — the agent will handle formatting in the scheduler based on task description."""
+- Never add prefixes like "Reminder:" or "Task:" to the title — the agent will handle formatting in the scheduler based on task description.
+- If the user asks to disable reminders for a task ("не напоминай про ...", "отключи уведомления для задачи ..."), use `toggle_reminder` with `enable=False`. To re-enable, use `enable=True`. You may need to identify the task_id first (e.g., from context or by searching)."""
 
 
 # Dependencies container for agent
@@ -307,6 +310,26 @@ def get_agent() -> Agent[AgentDeps]:
                 "success": False,
                 "error": result.get("message", "Failed to create reminder")
             }
+    
+    @agent.tool
+    async def toggle_reminder(
+        ctx: RunContext[AgentDeps],
+        task_id: int,
+        enable: bool,
+    ) -> dict:
+        """
+        Enable or disable reminders for a specific task.
+        
+        Args:
+            task_id: ID of the task to toggle
+            enable: True to enable reminders, False to disable
+        
+        Returns:
+            Dictionary with success status and confirmation message.
+        """
+        user_id = ctx.deps.user_id
+        result = await _toggle_reminder(task_id=task_id, enable=enable)
+        return result
     
     @agent.tool
     async def recall_user_preferences(
