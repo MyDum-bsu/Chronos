@@ -4,6 +4,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 from memory.db import (
+    create_task,
     Task,
     get_session,
     get_tasks_today,
