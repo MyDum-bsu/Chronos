@@ -52,4 +52,4 @@ chroma_data/
 # Scheduler
 scheduler/*.pyc
 scheduler/__pycache__/
-ENDOFFILE
+ENDOFFILEchroma_data_test/
