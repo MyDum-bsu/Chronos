@@ -8,6 +8,8 @@ from memory.db import (
     get_tasks_today,
     update_task_status,
     get_task_by_id,
+    get_incomplete_tasks,
+    get_tasks_by_user,
 )
 
 
@@ -64,7 +66,6 @@ async def get_time(timezone: str = "UTC") -> str:
         >>> await get_time()
         '2026-04-28 12:30:05'
     """
-    # For now, return local time; timezone handling can be added with pytz if needed
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -164,8 +165,33 @@ async def complete_task(task_id: int, timezone: str = "UTC") -> dict:
     }
 
 
+async def get_task_stats(user_id: int) -> dict:
+    """
+    Get task statistics for a user.
+    
+    Args:
+        user_id: Telegram user ID
+    
+    Returns:
+        Dictionary with total, completed, incomplete, and today's task counts.
+    
+    Example:
+        >>> await get_task_stats(123)
+        {"total": 5, "completed": 2, "incomplete": 3, "today": 1}
+    """
+    all_tasks = await get_tasks_by_user(user_id)
+    incomplete = await get_incomplete_tasks(user_id)
+    today_tasks = await get_tasks_today(user_id)
+    
+    return {
+        "total": len(all_tasks),
+        "completed": len(all_tasks) - len(incomplete),
+        "incomplete": len(incomplete),
+        "today": len(today_tasks),
+    }
+
+
 if __name__ == "__main__":
-    # Quick test
     async def test():
         from memory.db import init_db
         
@@ -183,5 +209,8 @@ if __name__ == "__main__":
         
         completed = await complete_task(task["task_id"])
         print(f"Completed: {completed}")
+        
+        stats = await get_task_stats(1)
+        print(f"Stats: {stats}")
     
     asyncio.run(test())

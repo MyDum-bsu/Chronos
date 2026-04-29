@@ -129,6 +129,17 @@ async def get_incomplete_tasks(user_id: int) -> Sequence[Task]:
         return result.all()
 
 
+async def get_all_incomplete_tasks() -> List[Task]:
+    """Get all incomplete tasks across all users with deadline set."""
+    async with get_session() as session:
+        statement = select(Task).where(
+            Task.is_completed == False,
+            Task.deadline != None,
+        )
+        result = await session.exec(statement)
+        return result.all()
+
+
 if __name__ == "__main__":
     asyncio.run(init_db())
     print("Database initialized")

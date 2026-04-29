@@ -5,11 +5,13 @@ import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from dotenv import load_dotenv
 
 from bot.handlers import register_handlers
 from memory.db import init_db
+from scheduler.jobs import create_reminder_job
 
 # Load environment variables from .env file
 load_dotenv()
@@ -42,8 +44,20 @@ async def main() -> None:
     )
     dp = Dispatcher()
     
+    # Initialize scheduler
+    scheduler = AsyncIOScheduler()
+    
+    # Add reminder job - runs every 60 seconds
+    reminder_job = create_reminder_job(bot)
+    scheduler.add_job(reminder_job, 'interval', seconds=60, id='check_deadlines')
+    logger.info("Reminder job scheduled (every 60 seconds)")
+    
     # Register handlers
     register_handlers(dp)
+    
+    # Start scheduler
+    scheduler.start()
+    logger.info("Scheduler started")
     
     # Start polling
     logger.info("Starting Chronos bot...")
@@ -52,6 +66,7 @@ async def main() -> None:
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot stopped by user")
     finally:
+        scheduler.shutdown(wait=False)
         await bot.session.close()
 
 
