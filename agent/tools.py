@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from memory.db import (
     Task,
+    get_session,
     get_tasks_today,
     update_task_status,
     get_task_by_id,
@@ -375,8 +376,7 @@ async def create_reminder(
         deadline=parsed_deadline,
     )
     
-    # Ensure remind is set (create_task already sets it, but ensuring)
-    # Note: We could explicitly set remind=True here if needed
+    # Ensure remind is set (create_task already sets it)
     
     return {
         "success": True,
@@ -396,7 +396,7 @@ async def toggle_reminder(task_id: int, enable: bool) -> dict:
     Returns:
         Dictionary with success status and confirmation message.
     """
-    # First, get the task to verify it exists
+    # First, verify task exists
     task = await get_task_by_id(task_id)
     if not task:
         return {
@@ -406,9 +406,7 @@ async def toggle_reminder(task_id: int, enable: bool) -> dict:
             "message": f"Task with ID {task_id} not found"
         }
     
-    # Update the remind field using update_task_in_db (we need a new function for just updating remind)
-    # For now, use a direct session update
-    from memory.db import get_session
+    # Update the remind field using direct session update
     async with get_session() as session:
         task = await session.get(Task, task_id)
         if task:
