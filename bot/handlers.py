@@ -1,7 +1,14 @@
 import html
+from typing import TypeGuard
 from aiogram import types, F
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
+from aiogram.types import (
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery,
+    Message,
+    MaybeInaccessibleMessageUnion,
+)
 
 from agent.core import process_message, vector_memory
 from agent.tools import get_today_tasks, complete_task, get_task_stats
@@ -164,9 +171,8 @@ async def handle_text_message(message: types.Message) -> None:
         raise
 
 
-# Helper to safely determine if message can be edited
-def _message_is_editable(message: Message | None) -> bool:
-    """Check if message is a real Message (not InaccessibleMessage or None)."""
+def _message_is_editable(message: MaybeInaccessibleMessageUnion | None) -> TypeGuard[Message]:
+    """Type guard to check if message is a real Message (not InaccessibleMessage or None)."""
     return isinstance(message, Message)
 
 
