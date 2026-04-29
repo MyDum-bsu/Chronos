@@ -6,6 +6,7 @@ from pydantic_ai.models.groq import GroqModel
 from pydantic_ai.providers.groq import GroqProvider
 
 from .tools import (
+    create_reminder as _create_reminder,
     get_time as _get_time,
     add_task as _add_task,
     get_today_tasks as _get_today_tasks,
@@ -52,14 +53,20 @@ SYSTEM_PROMPT = """You are Chronos, a polite and professional AI butler-planner.
 
 **Available tools:**
 - get_time: Get current time
-- add_task: Create a new task
+- add_task: Create a new task (for general task management)
+- create_reminder: Create a reminder that will be sent at exact time (use for "remind me at X" requests)
 - get_today_tasks: List tasks due today
 - complete_task: Mark a task as completed
 - update_task: Update task title/description/deadline
 - delete_task: Delete a task by ID
 - search_tasks: Search tasks by text query
 - get_task_stats: Get statistics (total, active, completed, overdue, today)
-- recall_user_preferences: Recall user memories"""
+- recall_user_preferences: Recall user memories
+
+**Important:**
+- For reminder requests ("напомни в 14:50", "remind me at 3pm"), use `create_reminder` tool. Pass the EXACT text the user wants to be reminded of in the `text` parameter, and the calculated deadline in ISO format.
+- For regular tasks, use `add_task`.
+- Never add prefixes like "Reminder:" or "Task:" to the title — the agent will handle formatting in the scheduler based on task description."""
 
 
 # Dependencies container for agent
@@ -266,6 +273,40 @@ def get_agent() -> Agent[AgentDeps]:
         """Get statistics about user's tasks."""
         result = await _get_task_stats(ctx.deps.user_id)
         return result
+    
+    @agent.tool
+    async def create_reminder(
+        ctx: RunContext[AgentDeps],
+        text: str,
+        deadline: str,
+    ) -> dict:
+        """
+        Create a reminder that will be sent at the specified time.
+        
+        Args:
+            text: Exact reminder message to send (will be sent as-is)
+            deadline: Reminder time in ISO format (YYYY-MM-DD HH:MM:SS)
+        
+        Returns:
+            Dictionary with task_id and confirmation message.
+        """
+        user_id = ctx.deps.user_id
+        result = await _create_reminder(
+            user_id=user_id,
+            text=text,
+            deadline=deadline,
+        )
+        if result.get("success"):
+            return {
+                "success": True,
+                "task_id": result["task_id"],
+                "message": f"Reminder set: '{text}' at {deadline}"
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("message", "Failed to create reminder")
+            }
     
     @agent.tool
     async def recall_user_preferences(

@@ -110,6 +110,20 @@ class TaskStatsResponse(BaseModel):
     today: int = Field(..., description="Number of tasks due today")
 
 
+class CreateReminderInput(BaseModel):
+    """Input model for creating a reminder."""
+    user_id: int = Field(..., gt=0, description="Telegram user ID")
+    text: str = Field(..., min_length=1, max_length=1000, description="Reminder text (exact message to send)")
+    deadline: str = Field(..., description="Reminder time in ISO format (YYYY-MM-DD HH:MM:SS)")
+
+
+class CreateReminderResponse(BaseModel):
+    """Response model for creating a reminder."""
+    success: bool = Field(..., description="Whether reminder creation succeeded")
+    task_id: int = Field(..., description="ID of created reminder task")
+    message: str = Field(..., description="Confirmation message")
+
+
 # ============== Core Tools ==============
 
 async def get_time(timezone: str = "UTC") -> str:
@@ -308,6 +322,52 @@ async def get_task_stats(user_id: int) -> dict:
         "completed": stats["completed"],
         "overdue": stats["overdue"],
         "today": stats["today"],
+    }
+
+
+async def create_reminder(
+    user_id: int,
+    text: str,
+    deadline: str,
+) -> dict:
+    """
+    Create a reminder that will be sent at the specified time.
+    
+    Args:
+        user_id: Telegram user ID
+        text: Exact reminder message to send (will be sent as-is)
+        deadline: Reminder time in ISO format (YYYY-MM-DD HH:MM:SS)
+    
+    Returns:
+        Dictionary with task_id and confirmation message.
+    """
+    # Parse deadline
+    try:
+        parsed_deadline = datetime.fromisoformat(deadline.replace(' ', 'T'))
+    except ValueError:
+        return {
+            "success": False,
+            "task_id": None,
+            "message": f"Invalid deadline format. Use YYYY-MM-DD HH:MM:SS",
+        }
+    
+    # Create task with special reminder settings
+    # title = text (the reminder message)
+    # description = "reminder" (marker for scheduler)
+    task = await create_task(
+        user_id=user_id,
+        title=text,
+        description="reminder",
+        deadline=parsed_deadline,
+    )
+    
+    # Ensure remind is set (create_task already sets it, but ensuring)
+    # Note: We could explicitly set remind=True here if needed
+    
+    return {
+        "success": True,
+        "task_id": task.id,
+        "message": f"Reminder set for {deadline}",
     }
 
 
