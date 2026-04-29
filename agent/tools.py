@@ -187,7 +187,7 @@ async def update_task(
         task_id: ID of the task to update
         title: New title (optional)
         description: New description (optional)
-        deadline: New deadline as ISO datetime string (optional)
+        deadline: New deadline in ISO format (optional)
     
     Returns:
         UpdateTaskResponse with success status and updated task if successful.
@@ -291,7 +291,7 @@ async def search_tasks(user_id: int, query: str) -> SearchTasksResponse:
     return SearchTasksResponse(tasks=task_dicts)
 
 
-async def get_task_stats(user_id: int) -> TaskStatsResponse:
+async def get_task_stats(user_id: int) -> dict:
     """
     Get detailed statistics about user's tasks.
     
@@ -299,16 +299,16 @@ async def get_task_stats(user_id: int) -> TaskStatsResponse:
         user_id: Telegram user ID
     
     Returns:
-        TaskStatsResponse with counts: total, active, completed, overdue, today.
+        Dictionary with counts: total, active, completed, overdue, today.
     """
     stats = await db_get_task_stats(user_id)
-    return TaskStatsResponse(
-        total=stats["total"],
-        active=stats["active"],      # incomplete
-        completed=stats["completed"],
-        overdue=stats["overdue"],
-        today=stats["today"],
-    )
+    return {
+        "total": stats["total"],
+        "active": stats["active"],
+        "completed": stats["completed"],
+        "overdue": stats["overdue"],
+        "today": stats["today"],
+    }
 
 
 async def recall_user_preferences(user_id: int, query: Optional[str] = None) -> list[str]:
