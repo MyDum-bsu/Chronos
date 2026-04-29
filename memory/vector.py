@@ -107,9 +107,9 @@ class VectorMemory:
         
         return texts
     
-    def delete_memory(self, memory_id: str) -> bool:
+    async def delete_memory(self, memory_id: str) -> bool:
         """
-        Delete a specific memory by ID (sync - rarely used, can be wrapped if needed).
+        Delete a specific memory by ID (async wrapper).
         
         Args:
             memory_id: Memory ID to delete
@@ -117,15 +117,19 @@ class VectorMemory:
         Returns:
             True if deleted, False otherwise
         """
+        return await asyncio.to_thread(self._delete_memory_sync, memory_id)
+    
+    def _delete_memory_sync(self, memory_id: str) -> bool:
+        """Synchronous implementation of delete_memory."""
         try:
             self.collection.delete(ids=[memory_id])
             return True
         except Exception:
             return False
     
-    def clear_user_memories(self, user_id: int) -> int:
+    async def clear_user_memories(self, user_id: int) -> int:
         """
-        Delete all memories for a specific user (sync - rarely used, can be wrapped if needed).
+        Delete all memories for a specific user (async wrapper).
         
         Args:
             user_id: Telegram user ID
@@ -133,6 +137,10 @@ class VectorMemory:
         Returns:
             Number of memories deleted
         """
+        return await asyncio.to_thread(self._clear_user_memories_sync, user_id)
+    
+    def _clear_user_memories_sync(self, user_id: int) -> int:
+        """Synchronous implementation of clear_user_memories."""
         # Get all memories for user
         results = self.collection.get(where={"user_id": user_id})
         

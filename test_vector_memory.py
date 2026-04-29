@@ -18,7 +18,7 @@ async def main() -> None:
     
     # Clear any existing test data
     print("\nClearing existing test memories...")
-    deleted = vm.clear_user_memories(999)
+    deleted = await vm.clear_user_memories(999)
     print(f"Deleted {deleted} existing memories")
     
     # Test data
@@ -34,7 +34,7 @@ async def main() -> None:
     print("\nStoring memories...")
     memory_ids = []
     for i, text in enumerate(memories):
-        memory_id = vm.remember(user_id, text, metadata={"index": i})
+        memory_id = await vm.remember(user_id, text, metadata={"index": i})
         memory_ids.append(memory_id)
         print(f"  Stored: '{text[:50]}...' with ID: {memory_id}")
     
@@ -49,7 +49,7 @@ async def main() -> None:
     
     for query in queries:
         print(f"\nQuery: '{query}'")
-        results = vm.recall(user_id, query, n_results=3)
+        results = await vm.recall(user_id, query, n_results=3)
         for i, result in enumerate(results, 1):
             print(f"  {i}. {result}")
     
@@ -59,12 +59,12 @@ async def main() -> None:
         print(f"  Deleted memory ID: {memory_ids[0]}")
     
     print("\nRecalling after deletion (should not see first memory):")
-    results = vm.recall(user_id, "programming Python", n_results=3)
+    results = await vm.recall(user_id, "programming Python", n_results=3)
     for i, result in enumerate(results, 1):
         print(f"  {i}. {result}")
     
     print("\nClearing all user memories...")
-    deleted = vm.clear_user_memories(user_id)
+    deleted = await vm.clear_user_memories(user_id)
     print(f"Deleted {deleted} memories")
     
     print("\nTest complete! ✅")
