@@ -22,7 +22,7 @@
 Chronos/
 ├── agent/
 │   ├── core.py       # PydanticAI Agent: инициализация модели, system prompt, регистрация инструментов
-│   └── tools.py      # Инструменты для LLM: get_time, add_task, get_today_tasks, complete_task, get_task_stats, recall_user_preferences
+│   └── tools.py      # Инструменты для LLM: get_time, add_task, get_today_tasks, complete_task, update_task, delete_task, search_tasks, get_task_stats, recall_user_preferences
 ├── bot/
 │   ├── handlers.py   # Aiogram хендлеры: команды, текстовые сообщения, callback-запросы от inline-кнопок
 │   └── keyboards.py  # Inline-клавиатуры главного меню
@@ -108,6 +108,7 @@ python3 main.py
 | `/start` | Приветствие и показ главного меню |
 | `/tasks` | Показать задачи на сегодня |
 | `/complete` | Отметить задачу как выполненную (инлайн-кнопки) |
+| `/stats` | Подробная статистика: всего, завершено, активных, просрочено, на сегодня |
 | `/help` | Справка по командам |
 | Любой текст | Спросите бота что-нибудь — он поможет с планированием, создаст задачу, покажет статистику и т.д. |
 
@@ -118,7 +119,7 @@ python3 main.py
 - **📋 Сегодня** — показать задачи на сегодня
 - **➕ Новая задача** — перейти к вводу задачи (бот попросит описание и дедлайн)
 - **✅ Завершить** — выбрать из активных задач для отметки как выполненной
-- **📊 Статистика** — общая статистика: всего, завершено, активных, на сегодня
+- **📊 Статистика** — общая статистика: всего, завершено, активных, просрочено, на сегодня
 
 ## Доступные инструменты (tools)
 
@@ -131,8 +132,11 @@ python3 main.py
    - `deadline` — дедлайн в формате `YYYY-MM-DD HH:MM:SS` (опционально)
 3. **`get_today_tasks(timezone="UTC")`** — показать задачи на сегодня
 4. **`complete_task(task_id, timezone="UTC")`** — отметить задачу как выполненную
-5. **`get_task_stats()`** — статистика по задачам (всего/завершено/активных/на сегодня)
-6. **`recall_user_preferences(query=None)`** — поиск в семантической памяти пользователя (предпочтения, привычки, прошлые обсуждения)
+5. **`update_task(task_id, title=None, description=None, deadline=None)`** — обновить задачу (любое поле)
+6. **`delete_task(task_id)`** — удалить задачу
+7. **`search_tasks(query)`** — поиск задач по названию/описанию
+8. **`get_task_stats()`** — статистика (total, active, completed, overdue, today)
+9. **`recall_user_preferences(query=None)`** — поиск в семантической памяти (предпочтения, привычки, прошлые обсуждения)
 
 ## Семантическая память
 
@@ -234,10 +238,11 @@ python test_vector_memory.py
 
 ### Добавление новых инструментов
 
-1. Добавьте функцию в `agent/tools.py` (с типизацией и docstring)
-2. Импортируйте в `agent/core.py` (с алиасом `_`)
-3. Зарегистрируйте через `@agent.tool` внутри `get_agent()`
-4. Учтите параметр `timezone` для совместимости с tool-use моделью
+1. Добавьте Pydantic модели (Input/Response) в `agent/tools.py`
+2. Реализуйте функцию с типизацией и docstring
+3. Импортируйте в `agent/core.py` (с алиасом `_`)
+4. Зарегистрируйте через `@agent.tool` внутри `get_agent()`
+5. Обновите `SYSTEM_PROMPT` с описанием нового инструмента
 
 ### Линтинг и форматирование
 
