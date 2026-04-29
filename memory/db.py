@@ -201,9 +201,9 @@ async def get_due_reminders() -> List[Task]:
             Task.remind == True,
             Task.reminded == False,
             Task.is_completed == False,
-            Task.deadline != None,
-            Task.deadline <= now,
-            Task.deadline > window_start,
+            Task.deadline.is_not(None),
+            Task.deadline <= now,  # type: ignore[operator]
+            Task.deadline > window_start,  # type: ignore[operator]
         )
         result = await session.exec(statement)
         return list(result.all())
