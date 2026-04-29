@@ -3,7 +3,7 @@ from typing import Callable, Awaitable
 
 from aiogram import Bot
 
-from memory.db import get_all_incomplete_tasks
+from memory.db import get_due_reminders, mark_reminded
 
 
 def create_reminder_job(bot: Bot) -> Callable[[], Awaitable[None]]:
@@ -17,30 +17,19 @@ def create_reminder_job(bot: Bot) -> Callable[[], Awaitable[None]]:
         Async callable that can be scheduled
     """
     async def check_deadlines() -> None:
-        """Check upcoming deadlines and send reminders to users."""
+        """Check due reminders and send notifications."""
         try:
-            now = datetime.now()
-            # Get all incomplete tasks with deadline set
-            tasks = await get_all_incomplete_tasks()
+            # Get all tasks due for reminders (within 2-minute window, not yet reminded)
+            tasks = await get_due_reminders()
             
             for task in tasks:
                 try:
-                    # Skip if no deadline
-                    if not task.deadline:
-                        continue
+                    # Send reminder - just the task title as requested
+                    message = f"⏰ {task.title}"
+                    await bot.send_message(chat_id=task.user_id, text=message)
                     
-                    # Calculate time difference
-                    time_diff = task.deadline - now
-                    
-                    # Send reminder if deadline is within 15 minutes from now
-                    # and not in the past (avoid re-sending for past minutes)
-                    if timedelta(0) < time_diff <= timedelta(minutes=15):
-                        deadline_str = task.deadline.strftime('%H:%M')
-                        message = (
-                            f"⏰ Напоминание: задача «{task.title}» "
-                            f"начинается в {deadline_str}"
-                        )
-                        await bot.send_message(chat_id=task.user_id, text=message)
+                    # Mark as reminded to avoid duplicate notifications
+                    await mark_reminded(task.id)
                 except Exception:
                     # Don't let one failed message stop the whole loop
                     continue

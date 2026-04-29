@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, List, Sequence, AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -16,6 +16,9 @@ class Task(SQLModel, table=True):
     description: Optional[str] = Field(default=None)
     deadline: Optional[datetime] = Field(default=None)
     is_completed: bool = Field(default=False)
+    # Reminder settings
+    remind: bool = Field(default=True, description="Whether to send reminders for this task")
+    reminded: bool = Field(default=False, description="Whether reminder has been sent")
 
 
 # Database URL for SQLite async
@@ -54,6 +57,8 @@ async def create_task(
         description=description,
         deadline=deadline,
         is_completed=False,
+        remind=True,
+        reminded=False,
     )
     async with get_session() as session:
         session.add(task)
@@ -168,7 +173,6 @@ async def get_all_incomplete_tasks() -> List[Task]:
 async def search_tasks(user_id: int, query: str) -> List[Task]:
     """Search tasks by title/description text (case-insensitive partial match)."""
     async with get_session() as session:
-        # Use LIKE for simple text search; could be enhanced with full-text search
         search_pattern = f"%{query}%"
         statement = select(Task).where(
             Task.user_id == user_id,
@@ -177,6 +181,44 @@ async def search_tasks(user_id: int, query: str) -> List[Task]:
         )
         result = await session.exec(statement)
         return list(result.all())
+
+
+async def get_due_reminders() -> List[Task]:
+    """
+    Get tasks due for reminder notification.
+    
+    Returns tasks where:
+    - remind == True
+    - reminded == False
+    - deadline <= now() (due now or past)
+    - deadline > now() - timedelta(minutes=2) (within the last 2 minutes)
+    """
+    now = datetime.now()
+    window_start = now - timedelta(minutes=2)
+    
+    async with get_session() as session:
+        statement = select(Task).where(
+            Task.remind == True,
+            Task.reminded == False,
+            Task.is_completed == False,
+            Task.deadline != None,
+            Task.deadline <= now,
+            Task.deadline > window_start,
+        )
+        result = await session.exec(statement)
+        return list(result.all())
+
+
+async def mark_reminded(task_id: int) -> bool:
+    """Mark a task as having sent its reminder."""
+    async with get_session() as session:
+        task = await session.get(Task, task_id)
+        if task:
+            task.reminded = True
+            session.add(task)
+            await session.commit()
+            return True
+        return False
 
 
 async def get_task_stats(user_id: int) -> dict:

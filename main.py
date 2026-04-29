@@ -47,10 +47,10 @@ async def main() -> None:
     # Initialize scheduler
     scheduler = AsyncIOScheduler()
     
-    # Add reminder job - runs every 60 seconds
+    # Add reminder job - runs every 10 seconds for precise timing
     reminder_job = create_reminder_job(bot)
-    scheduler.add_job(reminder_job, 'interval', seconds=60, id='check_deadlines')
-    logger.info("Reminder job scheduled (every 60 seconds)")
+    scheduler.add_job(reminder_job, 'interval', seconds=10, id='check_deadlines')
+    logger.info("Reminder job scheduled (every 10 seconds)")
     
     # Register handlers
     register_handlers(dp)
