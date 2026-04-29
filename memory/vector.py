@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from typing import Optional, List
 
@@ -33,9 +34,9 @@ class VectorMemory:
         # Load embedding model
         self.embedder = SentenceTransformer('all-MiniLM-L6-v2')
     
-    def remember(self, user_id: int, text: str, metadata: Optional[dict] = None) -> str:
+    async def remember(self, user_id: int, text: str, metadata: Optional[dict] = None) -> str:
         """
-        Store a text fragment in vector memory.
+        Store a text fragment in vector memory (async wrapper).
         
         Args:
             user_id: Telegram user ID
@@ -45,6 +46,11 @@ class VectorMemory:
         Returns:
             Memory ID (UUID)
         """
+        # Run blocking embedding + ChromaDB add in thread pool
+        return await asyncio.to_thread(self._remember_sync, user_id, text, metadata)
+    
+    def _remember_sync(self, user_id: int, text: str, metadata: Optional[dict] = None) -> str:
+        """Synchronous implementation of remember."""
         # Generate embedding
         embedding = self.embedder.encode(text, convert_to_numpy=True).tolist()
         
@@ -64,10 +70,10 @@ class VectorMemory:
         )
         
         return memory_id
-    
-    def recall(self, user_id: int, query: str, n_results: int = 5) -> List[str]:
+     
+    async def recall(self, user_id: int, query: str, n_results: int = 5) -> List[str]:
         """
-        Search for relevant memories by semantic similarity.
+        Search for relevant memories by semantic similarity (async wrapper).
         
         Args:
             user_id: Telegram user ID
@@ -77,6 +83,11 @@ class VectorMemory:
         Returns:
             List of memory texts sorted by relevance
         """
+        # Run blocking embedding + ChromaDB query in thread pool
+        return await asyncio.to_thread(self._recall_sync, user_id, query, n_results)
+    
+    def _recall_sync(self, user_id: int, query: str, n_results: int = 5) -> List[str]:
+        """Synchronous implementation of recall."""
         # Generate query embedding
         query_embedding = self.embedder.encode(query, convert_to_numpy=True).tolist()
         
@@ -98,7 +109,7 @@ class VectorMemory:
     
     def delete_memory(self, memory_id: str) -> bool:
         """
-        Delete a specific memory by ID.
+        Delete a specific memory by ID (sync - rarely used, can be wrapped if needed).
         
         Args:
             memory_id: Memory ID to delete
@@ -114,7 +125,7 @@ class VectorMemory:
     
     def clear_user_memories(self, user_id: int) -> int:
         """
-        Delete all memories for a specific user.
+        Delete all memories for a specific user (sync - rarely used, can be wrapped if needed).
         
         Args:
             user_id: Telegram user ID

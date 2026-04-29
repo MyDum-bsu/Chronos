@@ -207,7 +207,7 @@ async def recall_user_preferences(user_id: int, query: Optional[str] = None) -> 
         vm = get_vector_memory()
         # If query is None, use empty string to get recent memories
         search_query = query if query else ""
-        memories = vm.recall(user_id=user_id, query=search_query, n_results=5)
+        memories = await vm.recall(user_id=user_id, query=search_query, n_results=5)
         return memories if memories else []
     except Exception:
         return []
