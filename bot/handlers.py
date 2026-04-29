@@ -1,6 +1,6 @@
 import html
-from typing import TypeGuard
 from aiogram import types, F
+from typing import TypeGuard
 from aiogram.filters import Command
 from aiogram.types import (
     InlineKeyboardMarkup,
@@ -11,7 +11,11 @@ from aiogram.types import (
 )
 
 from agent.core import process_message, vector_memory
-from agent.tools import get_today_tasks, complete_task, get_task_stats
+from agent.tools import (
+    get_today_tasks,
+    complete_task,
+    get_task_stats as get_stats_tool,
+)
 from memory.db import get_incomplete_tasks, get_task_by_id
 from bot.keyboards import get_main_menu
 
@@ -110,13 +114,44 @@ async def cmd_complete(message: types.Message) -> None:
         raise
 
 
+async def cmd_stats(message: types.Message) -> None:
+    """Handle /stats command - show task statistics."""
+    if not message.from_user:
+        await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
+        return
+
+    user_id = message.from_user.id
+    try:
+        stats = await get_stats_tool(user_id)
+        
+        response = "📊 Ваша статистика:\n\n"
+        response += f"📋 Всего задач: {stats.get('total', 0)}\n"
+        response += f"✅ Завершено: {stats.get('completed', 0)}\n"
+        response += f"⏳ Активных: {stats.get('active', 0)}\n"
+        response += f"❗ Просрочено: {stats.get('overdue', 0)}\n"
+        response += f"📅 На сегодня: {stats.get('today', 0)}\n"
+        
+        await message.answer(
+            response,
+            reply_markup=get_main_menu()
+        )
+    except Exception:
+        await message.answer(
+            "I apologize, but I encountered an issue processing your request. "
+            "Please try again later.",
+            reply_markup=get_main_menu()
+        )
+        raise
+
+
 async def cmd_help(message: types.Message) -> None:
     """Handle /help command."""
     help_text = (
         "🔧 Доступные команды:\n\n"
         "/start - Приветствие и представление\n"
         "/tasks - Показать задачи на сегодня\n"
-        "/complete - Отметить задачу как выполненную\n"
+        "/complete - Отметить задачу как выполненной\n"
+        "/stats - Показать подробную статистику\n"
         "/help - Показать эту справку\n\n"
         "Вы также можете просто писать мне сообщения, и я помогу вам управлять задачами и временем."
     )
@@ -299,13 +334,14 @@ async def callback_stats(callback: CallbackQuery) -> None:
     await callback.answer()
     
     try:
-        stats = await get_task_stats(user_id)
+        stats = await get_stats_tool(user_id)
         
         response = "📊 Ваша статистика:\n\n"
-        response += f"📋 Всего задач: {stats['total']}\n"
-        response += f"✅ Завершено: {stats['completed']}\n"
-        response += f"⏳ Активных: {stats['incomplete']}\n"
-        response += f"📅 На сегодня: {stats['today']}\n"
+        response += f"📋 Всего задач: {stats.get('total', 0)}\n"
+        response += f"✅ Завершено: {stats.get('completed', 0)}\n"
+        response += f"⏳ Активных: {stats.get('active', 0)}\n"
+        response += f"❗ Просрочено: {stats.get('overdue', 0)}\n"
+        response += f"📅 На сегодня: {stats.get('today', 0)}\n"
         
         if _message_is_editable(callback.message):
             await callback.message.edit_text(response, reply_markup=get_main_menu())
@@ -380,6 +416,7 @@ def register_handlers(dp) -> None:
     dp.message.register(cmd_start, Command("start"))
     dp.message.register(cmd_tasks, Command("tasks"))
     dp.message.register(cmd_complete, Command("complete"))
+    dp.message.register(cmd_stats, Command("stats"))
     dp.message.register(cmd_help, Command("help"))
     dp.message.register(handle_text_message, F.text)
     

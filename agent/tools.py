@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field
 
 from memory.db import (
@@ -10,9 +10,15 @@ from memory.db import (
     get_task_by_id,
     get_incomplete_tasks,
     get_tasks_by_user,
+    update_task_in_db,
+    delete_task as db_delete_task,
+    search_tasks as db_search_tasks,
+    get_task_stats as db_get_task_stats,
 )
 from memory.vector import get_vector_memory
 
+
+# ============== Input/Output Models ==============
 
 class CurrentTimeResponse(BaseModel):
     """Response model for current time."""
@@ -53,20 +59,61 @@ class CompleteTaskResponse(BaseModel):
     success: bool = Field(..., description="Whether operation succeeded")
 
 
+class UpdateTaskInput(BaseModel):
+    """Input model for updating a task."""
+    task_id: int = Field(..., gt=0, description="ID of the task to update")
+    title: Optional[str] = Field(None, min_length=1, max_length=255, description="New task title")
+    description: Optional[str] = Field(None, max_length=1000, description="New task description")
+    deadline: Optional[str] = Field(None, description="New deadline in ISO format (YYYY-MM-DD HH:MM:SS)")
+
+
+class UpdateTaskResponse(BaseModel):
+    """Response model for updating a task."""
+    success: bool = Field(..., description="Whether update succeeded")
+    task: Optional[dict] = Field(None, description="Updated task data")
+    error: Optional[str] = Field(None, description="Error message if failed")
+
+
+class DeleteTaskInput(BaseModel):
+    """Input model for deleting a task."""
+    task_id: int = Field(..., gt=0, description="ID of the task to delete")
+
+
+class DeleteTaskResponse(BaseModel):
+    """Response model for deleting a task."""
+    success: bool = Field(..., description="Whether deletion succeeded")
+    error: Optional[str] = Field(None, description="Error message if failed")
+
+
+class SearchTasksInput(BaseModel):
+    """Input model for searching tasks."""
+    user_id: int = Field(..., gt=0, description="Telegram user ID")
+    query: str = Field(..., min_length=1, description="Search query")
+
+
+class SearchTasksResponse(BaseModel):
+    """Response model for searching tasks."""
+    tasks: List[dict] = Field(default_factory=list, description="List of matching tasks")
+
+
+class TaskStatsInput(BaseModel):
+    """Input model for getting task statistics."""
+    user_id: int = Field(..., gt=0, description="Telegram user ID")
+
+
+class TaskStatsResponse(BaseModel):
+    """Response model for task statistics."""
+    total: int = Field(..., description="Total number of tasks")
+    active: int = Field(..., description="Number of active (incomplete) tasks")
+    completed: int = Field(..., description="Number of completed tasks")
+    overdue: int = Field(..., description="Number of overdue tasks")
+    today: int = Field(..., description="Number of tasks due today")
+
+
+# ============== Core Tools ==============
+
 async def get_time(timezone: str = "UTC") -> str:
-    """
-    Get the current date and time.
-    
-    Args:
-        timezone: Timezone identifier (e.g., 'UTC', 'Europe/Moscow', 'America/New_York').
-    
-    Returns:
-        Current date and time in ISO format (YYYY-MM-DD HH:MM:SS).
-        
-    Example:
-        >>> await get_time()
-        '2026-04-28 12:30:05'
-    """
+    """Get the current date and time."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -76,22 +123,7 @@ async def add_task(
     description: Optional[str] = None,
     deadline: Optional[datetime] = None,
 ) -> dict:
-    """
-    Create a new task for a user.
-    
-    Args:
-        user_id: Telegram user ID
-        title: Task title (required)
-        description: Detailed task description (optional)
-        deadline: Task deadline as datetime object (optional)
-    
-    Returns:
-        Dictionary with task_id, title, user_id, and deadline.
-    
-    Example:
-        >>> await add_task(123, "Buy groceries", "Milk, eggs, bread")
-        {"task_id": 1, "title": "Buy groceries", "user_id": 123, "deadline": null}
-    """
+    """Create a new task for a user."""
     task = await create_task(
         user_id=user_id,
         title=title,
@@ -107,20 +139,7 @@ async def add_task(
 
 
 async def get_today_tasks(user_id: int, timezone: str = "UTC") -> dict:
-    """
-    Get all tasks due today for a specific user.
-    
-    Args:
-        user_id: Telegram user ID
-        timezone: Timezone identifier for date calculation (default: UTC)
-    
-    Returns:
-        Dictionary with list of tasks and count.
-    
-    Example:
-        >>> await get_today_tasks(123)
-        {"tasks": [{"task_id": 1, "title": "Meeting", ...}], "count": 1}
-    """
+    """Get all tasks due today for a specific user."""
     tasks = await get_tasks_today(user_id)
     return {
         "tasks": [
@@ -138,20 +157,7 @@ async def get_today_tasks(user_id: int, timezone: str = "UTC") -> dict:
 
 
 async def complete_task(task_id: int, timezone: str = "UTC") -> dict:
-    """
-    Mark a task as completed.
-    
-    Args:
-        task_id: ID of the task to mark as completed
-        timezone: Timezone identifier (unused, for tool signature compatibility)
-    
-    Returns:
-        Dictionary with task_id, is_completed status, and success flag.
-    
-    Example:
-        >>> await complete_task(1)
-        {"task_id": 1, "is_completed": true, "success": true}
-    """
+    """Mark a task as completed."""
     task = await update_task_status(task_id, is_completed=True)
     if task:
         return {
@@ -166,46 +172,149 @@ async def complete_task(task_id: int, timezone: str = "UTC") -> dict:
     }
 
 
-async def get_task_stats(user_id: int) -> dict:
+# ============== New Tools ==============
+
+async def update_task(
+    task_id: int,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    deadline: Optional[str] = None,
+) -> UpdateTaskResponse:
     """
-    Get task statistics for a user.
+    Update an existing task's fields.
+    
+    Args:
+        task_id: ID of the task to update
+        title: New title (optional)
+        description: New description (optional)
+        deadline: New deadline as ISO datetime string (optional)
+    
+    Returns:
+        UpdateTaskResponse with success status and updated task if successful.
+    """
+    # Parse deadline if provided
+    parsed_deadline = None
+    if deadline:
+        try:
+            parsed_deadline = datetime.fromisoformat(deadline.replace(' ', 'T'))
+        except ValueError:
+            return UpdateTaskResponse(
+                success=False,
+                task=None,
+                error=f"Invalid deadline format. Use YYYY-MM-DD HH:MM:SS"
+            )
+    
+    # Check if at least one field is being updated
+    if title is None and description is None and deadline is None:
+        return UpdateTaskResponse(
+            success=False,
+            task=None,
+            error="At least one field (title, description, or deadline) must be provided"
+        )
+    
+    # Update in database
+    task = await update_task_in_db(
+        task_id=task_id,
+        title=title,
+        description=description,
+        deadline=parsed_deadline,
+    )
+    
+    if task:
+        return UpdateTaskResponse(
+            success=True,
+            task={
+                "task_id": task.id,
+                "user_id": task.user_id,
+                "title": task.title,
+                "description": task.description,
+                "deadline": task.deadline,
+                "is_completed": task.is_completed,
+            },
+            error=None
+        )
+    else:
+        return UpdateTaskResponse(
+            success=False,
+            task=None,
+            error=f"Task with ID {task_id} not found"
+        )
+
+
+async def delete_task(task_id: int) -> DeleteTaskResponse:
+    """
+    Delete a task by ID.
+    
+    Args:
+        task_id: ID of the task to delete
+    
+    Returns:
+        DeleteTaskResponse with success status.
+    """
+    success = await db_delete_task(task_id)
+    if success:
+        return DeleteTaskResponse(success=True, error=None)
+    else:
+        return DeleteTaskResponse(
+            success=False,
+            error=f"Task with ID {task_id} not found or could not be deleted"
+        )
+
+
+async def search_tasks(user_id: int, query: str) -> SearchTasksResponse:
+    """
+    Search tasks by title or description text.
+    
+    Args:
+        user_id: Telegram user ID
+        query: Search query string (performs case-insensitive partial match)
+    
+    Returns:
+        SearchTasksResponse with list of matching tasks.
+    """
+    if not query or not query.strip():
+        return SearchTasksResponse(tasks=[])
+    
+    tasks = await db_search_tasks(user_id, query.strip())
+    
+    task_dicts = [
+        {
+            "task_id": t.id,
+            "title": t.title,
+            "description": t.description,
+            "deadline": t.deadline,
+            "is_completed": t.is_completed,
+        }
+        for t in tasks
+    ]
+    
+    return SearchTasksResponse(tasks=task_dicts)
+
+
+async def get_task_stats(user_id: int) -> TaskStatsResponse:
+    """
+    Get detailed statistics about user's tasks.
     
     Args:
         user_id: Telegram user ID
     
     Returns:
-        Dictionary with total, completed, incomplete, and today's task counts.
-    
-    Example:
-        >>> await get_task_stats(123)
-        {"total": 5, "completed": 2, "incomplete": 3, "today": 1}
+        TaskStatsResponse with counts: total, active, completed, overdue, today.
     """
-    all_tasks = await get_tasks_by_user(user_id)
-    incomplete = await get_incomplete_tasks(user_id)
-    today_tasks = await get_tasks_today(user_id)
-    
-    return {
-        "total": len(all_tasks),
-        "completed": len(all_tasks) - len(incomplete),
-        "incomplete": len(incomplete),
-        "today": len(today_tasks),
-    }
+    stats = await db_get_task_stats(user_id)
+    return TaskStatsResponse(
+        total=stats["total"],
+        active=stats["active"],      # incomplete
+        completed=stats["completed"],
+        overdue=stats["overdue"],
+        today=stats["today"],
+    )
 
 
 async def recall_user_preferences(user_id: int, query: Optional[str] = None) -> list[str]:
-    """
-    Recall relevant user preferences and past context from memory.
-    
-    Args:
-        user_id: Telegram user ID
-        query: Optional search query. If None, returns recent memories using empty query.
-    
-    Returns:
-        List of relevant memory strings sorted by relevance. Empty list if no memories found.
-    """
+    """Recall relevant user preferences from vector memory."""
     try:
         vm = get_vector_memory()
-        # If query is None, use empty string to get recent memories
         search_query = query if query else ""
         memories = await vm.recall(user_id=user_id, query=search_query, n_results=5)
         return memories if memories else []

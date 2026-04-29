@@ -10,6 +10,9 @@ from .tools import (
     add_task as _add_task,
     get_today_tasks as _get_today_tasks,
     complete_task as _complete_task,
+    update_task as _update_task,
+    delete_task as _delete_task,
+    search_tasks as _search_tasks,
     get_task_stats as _get_task_stats,
     recall_user_preferences as _recall_user_preferences,
 )
@@ -45,7 +48,18 @@ SYSTEM_PROMPT = """You are Chronos, a polite and professional AI butler-planner.
 **Memory and Context:**
 - Before generating a response, if the user's message relates to their preferences, habits, or past discussions, use the recall_user_preferences tool to retrieve relevant context from their memory.
 - Use this recalled information to personalize your response without explicitly mentioning the memory lookup.
-- Save important user preferences and facts automatically when they are revealed in conversation."""
+- Save important user preferences and facts automatically when they are revealed in conversation.
+
+**Available tools:**
+- get_time: Get current time
+- add_task: Create a new task
+- get_today_tasks: List tasks due today
+- complete_task: Mark a task as completed
+- update_task: Update task title/description/deadline
+- delete_task: Delete a task by ID
+- search_tasks: Search tasks by text query
+- get_task_stats: Get statistics (total, active, completed, overdue, today)
+- recall_user_preferences: Recall user memories"""
 
 
 # Dependencies container for agent
@@ -139,15 +153,7 @@ def get_agent() -> Agent[AgentDeps]:
     
     @agent.tool
     async def get_today_tasks(ctx: RunContext[AgentDeps], timezone: str = "UTC") -> dict:
-        """
-        Get all tasks due today for the current user.
-        
-        Args:
-            timezone: Timezone identifier for date calculation.
-        
-        Returns:
-            Dictionary with tasks list and count.
-        """
+        """Get all tasks due today for the current user."""
         return await _get_today_tasks(ctx.deps.user_id, timezone=timezone)
     
     @agent.tool
@@ -156,16 +162,7 @@ def get_agent() -> Agent[AgentDeps]:
         task_id: int,
         timezone: str = "UTC",
     ) -> dict:
-        """
-        Mark a task as completed.
-        
-        Args:
-            task_id: ID of the task to mark as completed
-            timezone: Timezone identifier (unused, for tool signature compatibility)
-        
-        Returns:
-            Confirmation message with success status.
-        """
+        """Mark a task as completed."""
         result = await _complete_task(task_id, timezone=timezone)
         if result["success"]:
             return {
@@ -179,14 +176,96 @@ def get_agent() -> Agent[AgentDeps]:
             }
     
     @agent.tool
-    async def get_task_stats(ctx: RunContext[AgentDeps]) -> dict:
+    async def update_task(
+        ctx: RunContext[AgentDeps],
+        task_id: int,
+        title: str | None = None,
+        description: str | None = None,
+        deadline: str | None = None,
+    ) -> dict:
         """
-        Get statistics about user's tasks.
+        Update an existing task's title, description, or deadline.
+        
+        Args:
+            task_id: ID of the task to update
+            title: New title (optional)
+            description: New description (optional)
+            deadline: New deadline in ISO format (optional)
         
         Returns:
-            Dictionary with total, completed, incomplete, and today's task counts.
+            Dictionary with success status, updated task data, or error message.
         """
-        return await _get_task_stats(ctx.deps.user_id)
+        result = await _update_task(
+            task_id=task_id,
+            title=title,
+            description=description,
+            deadline=deadline,
+        )
+        if result.success:
+            return {
+                "success": True,
+                "task": result.task,
+                "message": f"Task {task_id} updated successfully."
+            }
+        else:
+            return {
+                "success": False,
+                "task": None,
+                "error": result.error or "Failed to update task"
+            }
+    
+    @agent.tool
+    async def delete_task(
+        ctx: RunContext[AgentDeps],
+        task_id: int,
+    ) -> dict:
+        """
+        Delete a task by ID.
+        
+        Args:
+            task_id: ID of the task to delete
+        
+        Returns:
+            Dictionary with success status or error message.
+        """
+        result = await _delete_task(task_id=task_id)
+        if result.success:
+            return {
+                "success": True,
+                "message": f"Task {task_id} deleted successfully."
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.error or "Failed to delete task"
+            }
+    
+    @agent.tool
+    async def search_tasks(
+        ctx: RunContext[AgentDeps],
+        query: str,
+    ) -> dict:
+        """
+        Search tasks by title or description text.
+        
+        Args:
+            query: Text to search for in task title/description
+        
+        Returns:
+            Dictionary with list of matching tasks.
+        """
+        user_id = ctx.deps.user_id
+        result = await _search_tasks(user_id=user_id, query=query)
+        return {
+            "tasks": result.tasks,
+            "count": len(result.tasks)
+        }
+    
+    @agent.tool
+    async def get_task_stats(ctx: RunContext[AgentDeps]) -> dict:
+        """Get statistics about user's tasks."""
+        result = await _get_task_stats(ctx.deps.user_id)
+        return result
     
     @agent.tool
     async def recall_user_preferences(
@@ -203,8 +282,6 @@ def get_agent() -> Agent[AgentDeps]:
             List of relevant memory strings sorted by relevance. Returns empty list if no memories found.
         """
         user_id = ctx.deps.user_id
-        
-        # If query not provided, use empty string to get recent/contextual memories
         search_query = query if query else ""
         
         try:
@@ -238,20 +315,16 @@ async def process_message(user_id: int, text: str) -> str:
     
     Returns:
         Agent's response as a string.
-    
-    Example:
-        >>> response = await process_message(123, "Add task: buy groceries")
-        "I've added the task for you, sir."
     """
-    # Save user message to vector memory
+    # Save user message to vector memory before processing
     try:
         await vector_memory.remember(
             user_id=user_id,
             text=text,
-            metadata={"role": "user", "message": text[:200]}  # Truncate for metadata
+            metadata={"role": "user"}
         )
     except Exception:
-        pass  # Don't fail the whole process if memory save fails
+        pass
     
     agent = get_agent_instance()
     
@@ -262,15 +335,4 @@ async def process_message(user_id: int, text: str) -> str:
     )
     
     response = result.output
-    
-    # Optionally save assistant response to memory (commented for now)
-    # try:
-    #     await vector_memory.remember(
-    #         user_id=user_id,
-    #         text=response,
-    #         metadata={"role": "assistant", "message": response[:200]}
-    #     )
-    # except Exception:
-    #     pass
-    
     return response

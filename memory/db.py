@@ -1,9 +1,9 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List, Sequence, AsyncIterator
 from contextlib import asynccontextmanager
 
-from sqlmodel import SQLModel, Field, select
+from sqlmodel import SQLModel, Field, select, func
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -72,12 +72,12 @@ async def get_tasks_by_user(user_id: int) -> List[Task]:
 
 async def get_tasks_today(user_id: int) -> List[Task]:
     """Get tasks due today for a specific user."""
-    from datetime import date
     today = date.today()
     async with get_session() as session:
         statement = select(Task).where(
             Task.user_id == user_id,
             Task.deadline != None,
+            Task.is_completed == False,
         )
         result = await session.exec(statement)
         tasks = result.all()
@@ -92,6 +92,31 @@ async def get_task_by_id(task_id: int) -> Optional[Task]:
     """Get a single task by ID."""
     async with get_session() as session:
         return await session.get(Task, task_id)
+
+
+async def update_task_in_db(
+    task_id: int,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    deadline: Optional[datetime] = None,
+) -> Optional[Task]:
+    """Update task fields."""
+    async with get_session() as session:
+        task = await session.get(Task, task_id)
+        if not task:
+            return None
+        
+        if title is not None:
+            task.title = title
+        if description is not None:
+            task.description = description
+        if deadline is not None:
+            task.deadline = deadline
+        
+        session.add(task)
+        await session.commit()
+        await session.refresh(task)
+        return task
 
 
 async def update_task_status(task_id: int, is_completed: bool) -> Optional[Task]:
@@ -138,6 +163,42 @@ async def get_all_incomplete_tasks() -> List[Task]:
         )
         result = await session.exec(statement)
         return list(result.all())
+
+
+async def search_tasks(user_id: int, query: str) -> List[Task]:
+    """Search tasks by title/description text (case-insensitive partial match)."""
+    async with get_session() as session:
+        # Use LIKE for simple text search; could be enhanced with full-text search
+        search_pattern = f"%{query}%"
+        statement = select(Task).where(
+            Task.user_id == user_id,
+            func.lower(Task.title).like(func.lower(search_pattern)) |
+            func.lower(Task.description).like(func.lower(search_pattern))
+        )
+        result = await session.exec(statement)
+        return list(result.all())
+
+
+async def get_task_stats(user_id: int) -> dict:
+    """Get detailed task statistics for a user including overdue count."""
+    tasks = await get_tasks_by_user(user_id)
+    incomplete = await get_incomplete_tasks(user_id)
+    today_tasks = await get_tasks_today(user_id)
+    
+    # Count overdue tasks (incomplete with deadline in the past)
+    now = datetime.now()
+    overdue_count = sum(
+        1 for task in incomplete
+        if task.deadline and task.deadline < now
+    )
+    
+    return {
+        "total": len(tasks),
+        "completed": len(tasks) - len(incomplete),
+        "active": len(incomplete),
+        "overdue": overdue_count,
+        "today": len(today_tasks),
+    }
 
 
 if __name__ == "__main__":
