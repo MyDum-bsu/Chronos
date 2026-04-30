@@ -211,9 +211,9 @@ async def main():
     await init_db()
     
     # Initialize judge
-    print("Initializing LLM judge (using Groq llama3-70b-8192)...")
+    print("Initializing LLM judge (using Groq llama-3.3-70b-versatile)...")
     try:
-        judge = LLMJudge(model="llama3-70b-8192")
+        judge = LLMJudge()
     except ValueError as e:
         print(f"ERROR: {e}")
         sys.exit(1)
