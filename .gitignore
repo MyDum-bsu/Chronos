@@ -53,3 +53,4 @@ chroma_data/
 scheduler/*.pyc
 scheduler/__pycache__/
 ENDOFFILEchroma_data_test/
+evaluation/output/

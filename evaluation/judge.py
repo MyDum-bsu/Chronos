@@ -1,9 +1,10 @@
 """
 LLM-based Judge for evaluating Chronos agent responses.
-Uses Groq API with a strong model (e.g., llama3-70b) to score responses.
+Uses Groq API with a strong model (e.g., llama-3.3-70b) to score responses.
 """
 
 import os
+import httpx
 import json
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
@@ -73,7 +74,7 @@ Consider:
 
 Respond ONLY with valid JSON."""
     
-    def __init__(self, model: str = "llama3-70b-8192"):
+    def __init__(self, model: str = "llama-3.3-70b-versatile"):
         """
         Initialize judge with Groq client.
         
@@ -84,7 +85,14 @@ Respond ONLY with valid JSON."""
         if not api_key:
             raise ValueError("GROQ_API_KEY environment variable is required")
         
-        self.client = Groq(api_key=api_key)
+        # Set up HTTP client with proxy support (using same pattern as agent/core.py)
+        proxy_url = os.getenv("HTTP_PROXY")
+        if proxy_url:
+            http_client = httpx.Client(proxy=proxy_url)
+        else:
+            http_client = httpx.Client()
+        
+        self.client = Groq(api_key=api_key, http_client=http_client)
         self.model = model
     
     async def evaluate(
