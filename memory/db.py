@@ -1,3 +1,4 @@
+import os
 import asyncio
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Sequence, AsyncIterator
@@ -22,7 +23,7 @@ class Task(SQLModel, table=True):
 
 
 # Database URL for SQLite async
-DATABASE_URL = "sqlite+aiosqlite:///chronos.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///chronos.db")
 
 
 # Create async engine

@@ -464,3 +464,97 @@ if __name__ == "__main__":
         print(f"Stats: {stats}")
     
     asyncio.run(test())
+
+
+async def prioritize_tasks(user_id: int) -> dict:
+    """
+    Prioritize tasks using LLM based on importance and urgency.
+    
+    Args:
+        user_id: Telegram user ID
+        
+    Returns:
+        Dictionary with prioritized tasks and reasoning.
+    """
+    from agent.core import process_message
+    from memory.db import get_tasks_by_user
+    
+    # Get all tasks for the user
+    tasks = await get_tasks_by_user(user_id)
+    
+    if not tasks:
+        return {
+            "tasks": [],
+            "count": 0,
+            "reasoning": "No tasks to prioritize"
+        }
+    
+    # Format tasks for LLM processing
+    task_list = []
+    for i, task in enumerate(tasks):
+        task_list.append(
+            f"{i+1}. ID: {task.id}\n"
+            f"   Title: {task.title}\n"
+            f"   Description: {task.description or 'No description'}\n"
+            f"   Deadline: {task.deadline or 'No deadline'}\n"
+            f"   Completed: {task.is_completed}\n"
+        )
+    
+    tasks_text = "\n".join(task_list)
+    
+    # Ask LLM to prioritize tasks
+    prioritization_prompt = f"""Проанализируй следующие задачи и ранжиру их по приоритету (высокий, средний, низкий).
+Учитывай сроки выполнения, важность и срочность.
+Для каждой задачи укажи приоритет и краткое обоснование.
+
+Задачи:
+{tasks_text}
+
+Ответь в формате:
+1. ID: [task_id] - Приоритет: [высокий/средний/низкий] - Обоснование: [текст]
+2. ID: [task_id] - Приоритет: [высокий/средний/низкий] - Обоснование: [текст]
+и т.д."""
+
+    try:
+        # Use the agent to get prioritization
+        response = await process_message(user_id, prioritization_prompt)
+        
+        return {
+            "tasks": [
+                {
+                    "id": task.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "deadline": task.deadline,
+                    "is_completed": task.is_completed
+                }
+                for task in tasks
+            ],
+            "count": len(tasks),
+            "prioritization": response,
+            "reasoning": "Tasks prioritized by LLM based on importance and urgency"
+        }
+    except Exception as e:
+        # Fallback to simple ordering by deadline if LLM fails
+        sorted_tasks = sorted(
+            [t for t in tasks if t.deadline and not t.is_completed],
+            key=lambda x: x.deadline or datetime.max
+        ) + [t for t in tasks if not t.deadline or t.is_completed]
+        
+        return {
+            "tasks": [
+                {
+                    "id": task.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "deadline": task.deadline,
+                    "is_completed": task.is_completed
+                }
+                for task in sorted_tasks
+            ],
+            "count": len(tasks),
+            "prioritization": "Sorted by deadline (LLM unavailable)",
+            "reasoning": f"LLM prioritization failed: {str(e)}. Falling back to deadline-based sorting."
+        }
+
+

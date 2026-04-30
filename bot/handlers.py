@@ -405,6 +405,182 @@ async def callback_complete_specific(callback: CallbackQuery) -> None:
         raise
 
 
+
+
+# FSM handlers for creating tasks step by step
+from aiogram.fsm.context import FSMContext
+from bot.fsm import CreateTaskState
+from agent.tools import add_task as add_task_tool
+
+
+async def cmd_new_task_start(message: types.Message, state: FSMContext) -> None:
+    """Handle /newtask command or '➕ Новая задача' button - start FSM."""
+    if not message.from_user:
+        await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
+        return
+    
+    await state.set_state(CreateTaskState.waiting_for_title)
+    await message.answer(
+        "📝 Введи название задачи:",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+
+
+async def process_title(message: types.Message, state: FSMContext) -> None:
+    """Process task title and move to description input."""
+    if not message.from_user:
+        await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
+        return
+    
+    await state.update_data(title=message.text.strip())
+    await state.set_state(CreateTaskState.waiting_for_description)
+    await message.answer(
+        "📝 Теперь введи описание задачи (или отправь '-' если нет описания):"
+    )
+
+
+async def process_description(message: types.Message, state: FSMContext) -> None:
+    """Process task description and move to deadline input."""
+    if not message.from_user:
+        await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
+        return
+    
+    description = message.text.strip()
+    if description == '-':
+        description = None
+    await state.update_data(description=description)
+    await state.set_state(CreateTaskState.waiting_for_deadline)
+    await message.answer(
+        "📅 Введи дедлайн в формате 'ГГГГ-ММ-ДД ЧЧ:ММ:СС' (например, 2026-05-01 18:00:00) "
+        "или отправь '-' если дедлайн не нужен:"
+    )
+
+
+async def process_deadline(message: types.Message, state: FSMContext) -> None:
+    """Process task deadline and create the task."""
+    if not message.from_user:
+        await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
+        return
+    
+    user_id = message.from_user.id
+    data = await state.get_data()
+    title = data.get('title')
+    description = data.get('description')
+    deadline_str = message.text.strip()
+    
+    # Parse deadline
+    deadline = None
+    if deadline_str != '-':
+        try:
+            from datetime import datetime
+            deadline = datetime.fromisoformat(deadline_str.replace(' ', 'T'))
+        except ValueError:
+            await message.answer(
+                "❌ Неверный формат даты. Использи 'ГГГГ-ММ-ДД ЧЧ:ММ:СС' (например, 2026-05-01 18:00:00)"
+            )
+            return
+    
+    # Create task using the tool
+    try:
+        result = await add_task_tool(
+            user_id=user_id,
+            title=title,
+            description=description,
+            deadline=deadline
+        )
+        
+        if "task_id" in result:
+            await message.answer(
+                f"✅ Задача успешно создана!\n"
+                f"ID: {result['task_id']}\n"
+                f"Название: {result['title']}",
+                reply_markup=get_main_menu()
+            )
+        else:
+            await message.answer(
+                f"❌ Ошибка при создании задачи: {result.get('error', 'Неизвестная ошибка')}",
+                reply_markup=get_main_menu()
+            )
+    except Exception as e:
+        await message.answer(
+            f"❌ Произошла ошибка при создании задачи: {str(e)}",
+            reply_markup=get_main_menu()
+        )
+    
+    # Clear state
+    await state.clear()
+
+
+async def cmd_cancel(message: types.Message, state: FSMContext) -> None:
+    """Handle /cancel command - exit FSM."""
+    if not message.from_user:
+        await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
+        return
+    
+    current_state = await state.get_state()
+    if current_state is None:
+        await message.answer("Нет активных операций для отмены.", reply_markup=get_main_menu())
+        return
+    
+    await state.clear()
+    await message.answer("❌ Операция отменена.", reply_markup=get_main_menu())
+
+
+    dp.message.register(cmd_stats, Command("stats"))
+    dp.message.register(cmd_help, Command("help"))
+    dp.message.register(cmd_new_task_start, Command("newtask"))
+    dp.message.register(cmd_new_task_start, F.text == "➕ Новая задача")
+    dp.message.register(cmd_cancel, Command("cancel"))
+    dp.message.register(handle_text_message, F.text)
+    
+    # FSM handlers for task creation
+    dp.message.register(process_title, CreateTaskState.waiting_for_title)
+    dp.message.register(process_description, CreateTaskState.waiting_for_description)
+    dp.message.register(process_deadline, CreateTaskState.waiting_for_deadline)
+    
+    # Callback query handlers
+    dp.callback_query.register(callback_show_today, F.data == "show_today")
+    dp.callback_query.register(callback_new_task, F.data == "new_task")
+    dp.callback_query.register(callback_complete_task, F.data == "complete_task")
+    dp.callback_query.register(callback_stats, F.data == "stats")
+    dp.callback_query.register(callback_complete_specific, F.data.startswith("comp_"))
+
+
+async def callback_priorities(callback: CallbackQuery) -> None:
+    """Handle 'priorities' callback from main menu."""
+    if not callback.from_user:
+        await callback.answer("Cannot identify user.")
+        return
+    
+    user_id = callback.from_user.id
+    await callback.answer("Анализирую приоритеты задач...")
+    
+    try:
+        from agent.tools import prioritize_tasks
+        result = await prioritize_tasks(user_id)
+        
+        if result["count"] == 0:
+            text = "📭 У вас пока нет задач для приоритизации."
+        else:
+            text = f"🎯 Приоритизация задач ({result['count']} задач):\n\n"
+            text += result.get("prioritization", "Приоритизация недоступна")
+            if result.get("reasoning"):
+                text += f"\n\n💡 Обоснование: {result['reasoning']}"
+        
+        if callback.message:
+            await callback.message.edit_text(text, reply_markup=get_main_menu())
+        else:
+            await callback.answer(text, show_alert=True)
+            
+    except Exception as e:
+        error_text = "❌ Произошла ошибка при приоритизации задач."
+        if callback.message:
+            await callback.message.edit_text(error_text, reply_markup=get_main_menu())
+        else:
+            await callback.answer(error_text, show_alert=True)
+        raise
+
+
 def register_handlers(dp) -> None:
     """
     Register all handlers to the dispatcher.
@@ -418,11 +594,20 @@ def register_handlers(dp) -> None:
     dp.message.register(cmd_complete, Command("complete"))
     dp.message.register(cmd_stats, Command("stats"))
     dp.message.register(cmd_help, Command("help"))
+    dp.message.register(cmd_new_task_start, Command("newtask"))
+    dp.message.register(cmd_new_task_start, F.text == "➕ Новая задача")
+    dp.message.register(cmd_cancel, Command("cancel"))
     dp.message.register(handle_text_message, F.text)
+    
+    # FSM handlers for task creation
+    dp.message.register(process_title, CreateTaskState.waiting_for_title)
+    dp.message.register(process_description, CreateTaskState.waiting_for_description)
+    dp.message.register(process_deadline, CreateTaskState.waiting_for_deadline)
     
     # Callback query handlers
     dp.callback_query.register(callback_show_today, F.data == "show_today")
     dp.callback_query.register(callback_new_task, F.data == "new_task")
     dp.callback_query.register(callback_complete_task, F.data == "complete_task")
     dp.callback_query.register(callback_stats, F.data == "stats")
+    dp.callback_query.register(callback_priorities, F.data == "priorities")
     dp.callback_query.register(callback_complete_specific, F.data.startswith("comp_"))
