@@ -26,6 +26,10 @@ from memory.db import init_db
 from evaluation.test_cases import TEST_CASES, CATEGORIES
 from evaluation.judge import LLMJudge, JudgeResult
 
+# Rate limiting: delay between tests to avoid 429 errors
+# Groq free tier ~30 requests/minute, each test may make 2-4 requests
+TEST_DELAY = 5  # seconds
+
 
 async def run_single_test_case(
     judge: LLMJudge,
@@ -54,6 +58,9 @@ async def run_single_test_case(
         response = await process_message(user_id, input_text)
     except Exception as e:
         response = f"ERROR: {str(e)}"
+    
+    # Optional: small delay before judge call to spread API requests
+    await asyncio.sleep(1)
     
     # Evaluate using LLM judge (which infers tool usage from response text)
     result = await judge.evaluate(
@@ -89,6 +96,7 @@ async def run_all_tests(
     
     print(f"\n{'='*60}")
     print(f"Running {total} test cases...")
+    print(f"Rate limiting: {TEST_DELAY}s delay between tests")
     print(f"{'='*60}\n")
     
     for i, test_case in enumerate(TEST_CASES[:total], 1):
@@ -101,6 +109,10 @@ async def run_all_tests(
         status = "PASS" if result.rubric.overall_pass else "FAIL"
         tool_str = result.tool_called or "n/a"
         print(f"         → {status} | tool={tool_str} | {result.rubric.notes[:70]}")
+        
+        # Rate limiting delay between tests (skip after last test)
+        if i < total:
+            await asyncio.sleep(TEST_DELAY)
     
     return results
 
