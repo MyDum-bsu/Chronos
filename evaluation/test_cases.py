@@ -15,7 +15,7 @@ POSITIVE_CASES = [
         "input": "Создай задачу купить молоко завтра в 18:00",
         "category": "positive",
         "expected_tool": "add_task",
-        "expected_arguments": {"title": "купить молоко", "deadline": None},
+        "expected_arguments": {"title": "купить молоко", "deadline": "2026-05-01 18:00:00"},
         "expected_refusal": False,
         "description": "Basic task creation with deadline"
     },
