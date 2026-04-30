@@ -4,9 +4,10 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 from memory.db import (
+    AsyncSession,
+    engine,
     create_task,
     Task,
-    get_session,
     get_tasks_today,
     update_task_status,
     get_task_by_id,
@@ -408,7 +409,7 @@ async def toggle_reminder(task_id: int, enable: bool) -> dict:
         }
     
     # Update the remind field using direct session update
-    async with get_session() as session:
+    async with AsyncSession(engine) as session:
         task = await session.get(Task, task_id)
         if task:
             task.remind = enable
