@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 
 from groq import Groq, BadRequestError
+from groq.types.chat import ChatCompletionMessageParam
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -108,14 +109,14 @@ Respond ONLY with valid JSON."""
     
     async def _call_judge_with_model(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[ChatCompletionMessageParam],
         model_name: str
     ) -> str:
         """
         Call Groq API with a specific model.
         
         Args:
-            messages: Chat messages
+            messages: Chat messages (typed)
             model_name: Model to use
             
         Returns:
@@ -175,7 +176,8 @@ Respond ONLY with valid JSON."""
             response=response
         )
         
-        messages = [
+        # Build properly typed messages for Groq API
+        messages: List[ChatCompletionMessageParam] = [
             {"role": "system", "content": "You are an expert evaluator for AI assistants."},
             {"role": "user", "content": prompt}
         ]
@@ -236,7 +238,10 @@ Respond ONLY with valid JSON."""
                     
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON from model {model_name}: {e}")
-                logger.error(f"Raw content: {raw_feedback[:500]}")
+                if raw_feedback is not None:
+                    logger.error(f"Raw content: {raw_feedback[:500]}")
+                else:
+                    logger.error("Raw content: None")
                 raw_feedback = raw_feedback or f"JSON parse error: {str(e)}"
                 rubric = EvaluationRubric(
                     tool_accuracy=0,
