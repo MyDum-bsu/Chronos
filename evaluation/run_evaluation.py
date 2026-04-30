@@ -28,7 +28,7 @@ from evaluation.judge import LLMJudge, JudgeResult
 
 # Rate limiting: delay between tests to avoid 429 errors
 # Groq free tier ~30 requests/minute, each test may make 2-4 requests
-TEST_DELAY = 5  # seconds
+TEST_DELAY = 8  # seconds
 
 
 async def run_single_test_case(
