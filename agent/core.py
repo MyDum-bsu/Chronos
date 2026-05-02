@@ -472,4 +472,9 @@ async def process_message(user_id: int, text: str) -> str:
     )
     
     response = result.output
+    
+    # Handle empty or technical responses (function calls)
+    if not response or response.strip() == '' or response.strip().startswith('<function='):
+        return "Извините, не удалось обработать запрос. Попробуйте позже."
+    
     return response

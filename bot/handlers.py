@@ -446,7 +446,6 @@ async def callback_complete_specific(callback: CallbackQuery) -> None:
 
 # FSM handlers for creating tasks step by step
 from bot.fsm import CreateTaskState
-from agent.tools import add_task as add_task_tool
 
 
 async def cmd_new_task_start(message: types.Message, state: FSMContext) -> None:
@@ -463,7 +462,7 @@ async def cmd_new_task_start(message: types.Message, state: FSMContext) -> None:
 
 
 async def process_title(message: types.Message, state: FSMContext) -> None:
-    """Process task title and move to description input."""
+    """Process task title and move to deadline input."""
     if not message.from_user:
         await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
         return
@@ -473,35 +472,27 @@ async def process_title(message: types.Message, state: FSMContext) -> None:
         return
     
     await state.update_data(title=message.text.strip())
-    await state.set_state(CreateTaskState.waiting_for_description)
-    await message.answer(
-        "📝 Теперь введи описание задачи (или отправь '-' если нет описания):"
-    )
+    await state.set_state(CreateTaskState.waiting_for_deadline)
+    await message.answer("Введите дедлайн (например, завтра в 18:00):")
 
 
-async def process_description(message: types.Message, state: FSMContext) -> None:
-    """Process task description and move to deadline input."""
+async def process_deadline(message: types.Message, state: FSMContext) -> None:
+    """Process task deadline and move to description input."""
     if not message.from_user:
         await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
         return
     
     if not message.text:
-        await message.answer("Пожалуйста, введи описание задачи.")
+        await message.answer("Пожалуйста, введи дедлайн.")
         return
     
-    description = message.text.strip()
-    if description == '-':
-        description = None
-    await state.update_data(description=description)
-    await state.set_state(CreateTaskState.waiting_for_deadline)
-    await message.answer(
-        "📅 Введи дедлайн в формате 'ГГГГ-ММ-ДД ЧЧ:ММ:СС' (например, 2026-05-01 18:00:00) "
-        "или отправь '-' если дедлайн не нужен:"
-    )
+    await state.update_data(deadline=message.text.strip())
+    await state.set_state(CreateTaskState.waiting_for_description)
+    await message.answer("Введите описание (или /skip)")
 
 
-async def process_deadline(message: types.Message, state: FSMContext) -> None:
-    """Process task deadline and create the task."""
+async def process_description(message: types.Message, state: FSMContext) -> None:
+    """Process task description and create the task via agent."""
     if not message.from_user:
         await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
         return
@@ -509,62 +500,31 @@ async def process_deadline(message: types.Message, state: FSMContext) -> None:
     user_id = message.from_user.id
     data = await state.get_data()
     title = data.get('title')
-    description = data.get('description')
+    deadline = data.get('deadline', '')
     
-    if not message.text:
-        await message.answer("Пожалуйста, введи дедлайн.")
+    # Handle /skip command
+    if message.text and message.text.strip() == '/skip':
+        description = ''
+    elif not message.text:
+        await message.answer("Пожалуйста, введи описание задачи.")
         return
+    else:
+        description = message.text.strip()
     
     if title is None:
         await message.answer("Ошибка: название задачи не найдено. Начните заново с /newtask")
         await state.clear()
         return
     
-    # At this point, title is guaranteed to be a string from FSM state
-    assert title is not None  # for type checker
+    # Build query for agent
+    query = f'Создай задачу с названием "{title}", дедлайном "{deadline}", описанием "{description}"'
     
-    deadline_str = message.text.strip()
-    
-    # Parse deadline
-    deadline = None
-    if deadline_str != '-':
-        try:
-            from datetime import datetime
-            deadline = datetime.fromisoformat(deadline_str.replace(' ', 'T'))
-        except ValueError:
-            await message.answer(
-                "❌ Неверный формат даты. Использи 'ГГГГ-ММ-ДД ЧЧ:ММ:СС' (например, 2026-05-01 18:00:00)"
-            )
-            return
-    
-    # Create task using the tool
     try:
-        result = await add_task_tool(
-            user_id=user_id,
-            title=title,
-            description=description,
-            deadline=deadline
-        )
-        
-        if "task_id" in result:
-            await message.answer(
-                f"✅ Задача успешно создана!\n"
-                f"ID: {result['task_id']}\n"
-                f"Название: {result['title']}",
-                reply_markup=get_main_menu()
-            )
-        else:
-            await message.answer(
-                f"❌ Ошибка при создании задачи: {result.get('error', 'Неизвестная ошибка')}",
-                reply_markup=get_main_menu()
-            )
+        response = await process_message(user_id, query)
+        await message.answer(response, reply_markup=get_main_menu())
     except Exception as e:
-        await message.answer(
-            f"❌ Произошла ошибка при создании задачи: {str(e)}",
-            reply_markup=get_main_menu()
-        )
+        await message.answer(f"❌ Ошибка при создании задачи: {str(e)}", reply_markup=get_main_menu())
     
-    # Clear state
     await state.clear()
 
 
@@ -638,8 +598,8 @@ def register_handlers(dp) -> None:
     
     # FSM handlers for task creation
     dp.message.register(process_title, CreateTaskState.waiting_for_title)
-    dp.message.register(process_description, CreateTaskState.waiting_for_description)
     dp.message.register(process_deadline, CreateTaskState.waiting_for_deadline)
+    dp.message.register(process_description, CreateTaskState.waiting_for_description)
     
     # Callback query handlers
     dp.callback_query.register(callback_show_today, F.data == "show_today")
