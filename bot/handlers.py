@@ -2,6 +2,7 @@ import html
 from aiogram import types, F
 from typing import TypeGuard
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
@@ -261,14 +262,16 @@ async def callback_show_today(callback: CallbackQuery) -> None:
         raise
 
 
-async def callback_new_task(callback: CallbackQuery) -> None:
-    """Handle 'new_task' callback from main menu."""
+async def callback_new_task(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handle 'new_task' callback from main menu - start FSM."""
     if not callback.from_user:
         await callback.answer("Cannot identify user.")
         return
     
     await callback.answer()
-    text = "📝 Введи название задачи и время в свободной форме, например:\nКупить молоко завтра в 18:00\n\nИли просто напиши, что нужно сделать — я сам распределю время."
+    await state.set_state(CreateTaskState.waiting_for_title)
+    
+    text = "📝 Введи название задачи:\n\nДля отмены в любой момент отправь /cancel"
     
     if _message_is_editable(callback.message):
         await callback.message.edit_text(text, reply_markup=get_main_menu())
@@ -408,7 +411,6 @@ async def callback_complete_specific(callback: CallbackQuery) -> None:
 
 
 # FSM handlers for creating tasks step by step
-from aiogram.fsm.context import FSMContext
 from bot.fsm import CreateTaskState
 from agent.tools import add_task as add_task_tool
 
@@ -421,7 +423,7 @@ async def cmd_new_task_start(message: types.Message, state: FSMContext) -> None:
     
     await state.set_state(CreateTaskState.waiting_for_title)
     await message.answer(
-        "📝 Введи название задачи:",
+        "📝 Введи название задачи:\n\nДля отмены в любой момент отправь /cancel",
         reply_markup=types.ReplyKeyboardRemove()
     )
 
