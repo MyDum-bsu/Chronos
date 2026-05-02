@@ -432,6 +432,10 @@ async def process_title(message: types.Message, state: FSMContext) -> None:
         await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
         return
     
+    if not message.text:
+        await message.answer("Пожалуйста, введи название задачи.")
+        return
+    
     await state.update_data(title=message.text.strip())
     await state.set_state(CreateTaskState.waiting_for_description)
     await message.answer(
@@ -443,6 +447,10 @@ async def process_description(message: types.Message, state: FSMContext) -> None
     """Process task description and move to deadline input."""
     if not message.from_user:
         await message.answer("I apologize, but I couldn't identify you. Please start the bot with /start.")
+        return
+    
+    if not message.text:
+        await message.answer("Пожалуйста, введи описание задачи.")
         return
     
     description = message.text.strip()
@@ -466,6 +474,19 @@ async def process_deadline(message: types.Message, state: FSMContext) -> None:
     data = await state.get_data()
     title = data.get('title')
     description = data.get('description')
+    
+    if not message.text:
+        await message.answer("Пожалуйста, введи дедлайн.")
+        return
+    
+    if title is None:
+        await message.answer("Ошибка: название задачи не найдено. Начните заново с /newtask")
+        await state.clear()
+        return
+    
+    # At this point, title is guaranteed to be a string from FSM state
+    assert title is not None  # for type checker
+    
     deadline_str = message.text.strip()
     
     # Parse deadline
@@ -526,26 +547,6 @@ async def cmd_cancel(message: types.Message, state: FSMContext) -> None:
     await message.answer("❌ Операция отменена.", reply_markup=get_main_menu())
 
 
-    dp.message.register(cmd_stats, Command("stats"))
-    dp.message.register(cmd_help, Command("help"))
-    dp.message.register(cmd_new_task_start, Command("newtask"))
-    dp.message.register(cmd_new_task_start, F.text == "➕ Новая задача")
-    dp.message.register(cmd_cancel, Command("cancel"))
-    dp.message.register(handle_text_message, F.text)
-    
-    # FSM handlers for task creation
-    dp.message.register(process_title, CreateTaskState.waiting_for_title)
-    dp.message.register(process_description, CreateTaskState.waiting_for_description)
-    dp.message.register(process_deadline, CreateTaskState.waiting_for_deadline)
-    
-    # Callback query handlers
-    dp.callback_query.register(callback_show_today, F.data == "show_today")
-    dp.callback_query.register(callback_new_task, F.data == "new_task")
-    dp.callback_query.register(callback_complete_task, F.data == "complete_task")
-    dp.callback_query.register(callback_stats, F.data == "stats")
-    dp.callback_query.register(callback_complete_specific, F.data.startswith("comp_"))
-
-
 async def callback_priorities(callback: CallbackQuery) -> None:
     """Handle 'priorities' callback from main menu."""
     if not callback.from_user:
@@ -567,14 +568,14 @@ async def callback_priorities(callback: CallbackQuery) -> None:
             if result.get("reasoning"):
                 text += f"\n\n💡 Обоснование: {result['reasoning']}"
         
-        if callback.message:
+        if _message_is_editable(callback.message):
             await callback.message.edit_text(text, reply_markup=get_main_menu())
         else:
             await callback.answer(text, show_alert=True)
             
     except Exception as e:
         error_text = "❌ Произошла ошибка при приоритизации задач."
-        if callback.message:
+        if _message_is_editable(callback.message):
             await callback.message.edit_text(error_text, reply_markup=get_main_menu())
         else:
             await callback.answer(error_text, show_alert=True)

@@ -105,8 +105,9 @@ class VectorMemory:
         
         # Extract texts from metadatas
         texts = []
-        if results and results.get("metadatas"):
-            for meta_list in results["metadatas"]:
+        metadatas = results.get("metadatas") if results else None
+        if metadatas is not None:
+            for meta_list in metadatas:
                 for meta in meta_list:
                     texts.append(meta.get("text", ""))
         
@@ -149,8 +150,8 @@ class VectorMemory:
         # Get all memories for user
         results = self.collection.get(where={"user_id": user_id})
         
-        if results and results.get("ids"):
-            ids = results["ids"]
+        ids = results.get("ids") if results else None
+        if ids is not None:
             self.collection.delete(ids=ids)
             return len(ids)
         

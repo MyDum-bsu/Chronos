@@ -5,6 +5,7 @@ from typing import Optional, List, Sequence, AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlmodel import SQLModel, Field, select, func
+from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -177,8 +178,10 @@ async def search_tasks(user_id: int, query: str) -> List[Task]:
         search_pattern = f"%{query}%"
         statement = select(Task).where(
             Task.user_id == user_id,
-            func.lower(Task.title).like(func.lower(search_pattern)) |
-            func.lower(Task.description).like(func.lower(search_pattern))
+            or_(
+                func.lower(Task.title).like(func.lower(search_pattern)),
+                func.lower(Task.description).like(func.lower(search_pattern))
+            )
         )
         result = await session.exec(statement)
         return list(result.all())
@@ -202,7 +205,7 @@ async def get_due_reminders() -> List[Task]:
             Task.remind == True,
             Task.reminded == False,
             Task.is_completed == False,
-            Task.deadline.is_not(None),  # type: ignore[attr-defined]
+            Task.deadline.is_not(None),  # type: ignore[operator]
             Task.deadline <= now,  # type: ignore[operator]
             Task.deadline > window_start,  # type: ignore[operator]
         )
@@ -210,8 +213,10 @@ async def get_due_reminders() -> List[Task]:
         return list(result.all())
 
 
-async def mark_reminded(task_id: int) -> bool:
+async def mark_reminded(task_id: Optional[int]) -> bool:
     """Mark a task as having sent its reminder."""
+    if task_id is None:
+        return False
     async with get_session() as session:
         task = await session.get(Task, task_id)
         if task:
