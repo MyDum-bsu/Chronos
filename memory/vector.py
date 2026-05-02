@@ -76,7 +76,7 @@ class VectorMemory:
         
         return memory_id
      
-    async def recall(self, user_id: int, query: str, n_results: int = 5) -> List[str]:
+    async def recall(self, user_id: int, query: str, n_results: int = 5) -> List[dict]:
         """
         Search for relevant memories by semantic similarity (async wrapper).
         
@@ -91,8 +91,12 @@ class VectorMemory:
         # Run blocking embedding + ChromaDB query in thread pool
         return await asyncio.to_thread(self._recall_sync, user_id, query, n_results)
     
-    def _recall_sync(self, user_id: int, query: str, n_results: int = 5) -> List[str]:
-        """Synchronous implementation of recall."""
+    def _recall_sync(self, user_id: int, query: str, n_results: int = 5) -> List[dict]:
+        """Synchronous implementation of recall.
+        
+        Returns:
+            List of dicts with 'text' and 'metadata' keys
+        """
         # Generate query embedding
         query_embedding = self.embedder.encode(query, convert_to_numpy=True).tolist()
         
@@ -103,15 +107,18 @@ class VectorMemory:
             where={"user_id": user_id}
         )
         
-        # Extract texts from metadatas
-        texts = []
+        # Extract memories with text and metadata
+        memories = []
         metadatas = results.get("metadatas") if results else None
         if metadatas is not None:
             for meta_list in metadatas:
                 for meta in meta_list:
-                    texts.append(meta.get("text", ""))
+                    memories.append({
+                        "text": meta.get("text", ""),
+                        "metadata": {k: v for k, v in meta.items() if k != "text"}
+                    })
         
-        return texts
+        return memories
     
     async def delete_memory(self, memory_id: str) -> bool:
         """

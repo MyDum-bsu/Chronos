@@ -1,4 +1,5 @@
 import html
+import re
 from aiogram import types, F
 from typing import TypeGuard
 from aiogram.filters import Command
@@ -174,6 +175,21 @@ async def handle_text_message(message: types.Message) -> None:
     if not user_text:
         return
     
+    # Check for name introduction patterns and save with type="user_name"
+    name_pattern = re.compile(r'меня зовут\s+(\w+)|зовут\s+(\w+)|имя\s+(\w+)|обращайся\s+ко\s+мне\s+(\w+)|меня\s+(\w+)', re.IGNORECASE)
+    name_match = name_pattern.search(user_text)
+    if name_match:
+        name = next((g for g in name_match.groups() if g), None)
+        if name:
+            try:
+                await vector_memory.remember(
+                    user_id=user_id,
+                    text=f"Пользователь зовется {name}",
+                    metadata={"role": "user", "type": "user_name"}
+                )
+            except Exception:
+                pass
+    
     # Save user message to vector memory before processing
     try:
         await vector_memory.remember(
@@ -184,12 +200,30 @@ async def handle_text_message(message: types.Message) -> None:
     except Exception:
         pass  # Don't fail if memory save fails
     
+    # Recall user_name memory if exists
+    user_name_info = ""
+    try:
+        memories = await vector_memory.recall(user_id, "имя пользователь", n_results=3)
+        for mem in memories:
+            if isinstance(mem, dict):
+                metadata = mem.get("metadata", {})
+                if metadata.get("type") == "user_name":
+                    user_name_info = f" (имя пользователя: {mem.get('text', '').replace('Пользователь зовется ', '')})"
+                    break
+    except Exception:
+        pass  # Don't fail if recall fails
+    
+    # Prepend user name context to message if available
+    enhanced_text = user_text
+    if user_name_info:
+        enhanced_text = f"[Контекст: {user_name_info}] {user_text}"
+    
     # Show typing status while processing (only if bot is available)
     if message.bot:
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
     
     try:
-        response = await process_message(user_id, user_text)
+        response = await process_message(user_id, enhanced_text)
         # Escape HTML to prevent Telegram parsing errors if model outputs raw tags
         safe_response = html.escape(response)
         await message.answer(
